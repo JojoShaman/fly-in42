@@ -1,18 +1,19 @@
 from data import Hub, Data, Type
 
+
 class Graph:
     def __init__(self, size: int) -> None:
-        self.adj_matrix = [[0] * size for _ in range(size)]
-        self.size = size
-        self.vertex_data = [''] * size
+        self.adj_matrix: list[list[float]] = [[0] * size for _ in range(size)]
+        self.size: int = size
+        self.vertex_data: list[str] = [''] * size
         self.lookup: dict[str, int] = {}
         self.lookhub: dict[str, Hub] = {}
 
-    def add_edge(self, u: int, v: int, weight) -> None:
+    def add_edge(self, u: int, v: int, weight: float) -> None:
         if 0 <= u < self.size and 0 <= v < self.size:
             self.adj_matrix[u][v] = weight
 
-    def add_vertex_data(self, vertex, data) -> None:
+    def add_vertex_data(self, vertex: int, data: str) -> None:
         if 0 <= vertex < self.size:
             self.vertex_data[vertex] = data
 
@@ -41,8 +42,9 @@ class Graph:
                         previous[v] = u
         return (previous)
 
+
 def find_path(data: Data, start: str,
-              links: dict[tuple[str, str], int] | None=None):
+              links: dict[tuple[str, str], int] | None = None) -> list[Hub]:
     link = links or {}
     g = Graph(len(data.total_hubs))
     for n, h in enumerate(data.total_hubs):
@@ -51,7 +53,8 @@ def find_path(data: Data, start: str,
     lookhub = {h.name: h for h in data.total_hubs}
     for c in data.connection:
         if c.name1 in lookup and c.name2 in lookup:
-            key = (c.name1, c.name2) if c.name1 < c.name2 else (c.name2, c.name1)
+            key = ((c.name1, c.name2) if c.name1 < c.name2
+                   else (c.name2, c.name1))
             h1, h2 = lookup[c.name1], lookup[c.name2]
             base = 1
             if lookhub[c.name2].meta_data.zone == Type.restricted:

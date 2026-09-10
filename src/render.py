@@ -1,46 +1,58 @@
-import os
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 import pygame
+from pygame.time import Clock, get_ticks
+from pygame.display import (
+    get_surface,
+    set_mode,
+    set_icon,
+    set_caption,
+    update,
+    Info)
+from pygame import Rect, Surface, Color
+from pygame.event import Event
+from pygame.font import Font
+from pygame.image import load
+from pygame.transform import scale, smoothscale
 from data import Data
 from parsing import Parsing
 from pathlib import Path
 import colorsys
 from simulation import Drone, Simulation
 
+
 class Menu:
-    def __init__(self, font) -> None:
-        self._font: pygame.font.Font = font
-        self._files = sorted(Path('maps').rglob('*.txt'))
-        self._index = 0
-        self._visible = False
-        self._w = self._screen.get_width() // 4
-        self._h = self._screen.get_height() // 16
-        self._rect = pygame.Rect(self._screen.get_width() - self._w - 20,
-                                 self._screen.get_height() - self._h - 20,
-                                 self._w, self._h)
+    def __init__(self, font: Font) -> None:
+        self._font: Font = font
+        self._files: list[Path] = sorted(Path('maps').rglob('*.txt'))
+        self._index: int = 0
+        self._visible: bool = False
+        self._w: int = self._screen.get_width() // 4
+        self._h: int = self._screen.get_height() // 16
+        self._rect: Rect = Rect(self._screen.get_width() - self._w - 20,
+                                self._screen.get_height() - self._h - 20,
+                                self._w, self._h)
         self._tree: dict[str, list[Path]] = {}
         for p in self._files:
             self._tree.setdefault(p.parent.name, []).append(p)
-        self._folder = None
-        self._index = 0
+        self._folder: str | None = None
 
     @property
-    def _screen(self):
-        return pygame.display.get_surface()
+    def _screen(self) -> Surface:
+        return get_surface()
 
-    def _resize(self, w, h):
+    def _resize(self, w: int, h: int) -> None:
         self._w, self._h = w // 4, h // 16
-        self._rect = pygame.Rect(self._screen.get_width() - self._w - 20,
-                                self._screen.get_height() - self._h - 20,
-                                self._w, self._h)
-        size = max(5, self._screen.get_height() // 36)
-        self._font = pygame.font.Font('src/images/determination.ttf', size)
-    def _entries(self):
+        self._rect = Rect(self._screen.get_width() - self._w - 20,
+                          self._screen.get_height() - self._h - 20,
+                          self._w, self._h)
+        size: int = max(5, self._screen.get_height() // 36)
+        self._font = Font('src/images/determination.ttf', size)
+
+    def _entries(self) -> list[Path] | list[str]:
         if self._folder is None:
             return list(self._tree.keys())
         return self._tree[self._folder]
 
-    def handle(self, event):
+    def handle(self, event: Event) -> Path | None:
         if event.type != pygame.KEYDOWN:
             return None
         if event.key == pygame.K_ESCAPE:
@@ -58,79 +70,82 @@ class Menu:
         elif event.key == pygame.K_UP:
             self._index = (self._index - 1) % len(self._entries())
         elif event.key == pygame.K_RETURN:
-            entries = self._entries()
             if self._folder is None:
-                self._folder = entries[self._index]
+                self._folder = list(self._tree.keys())[self._index]
                 self._index = 0
             else:
+                folder = self._folder
                 self._visible = False
                 self._folder = None
                 index = self._index
                 self._index = 0
-                return entries[index]
+                return self._tree[folder][index]
         return None
 
-    def draw(self):
+    def draw(self) -> None:
         if not self._visible:
             return
-        panel = pygame.Surface((self._w, self._h), pygame.SRCALPHA)
+        panel: Surface = Surface((self._w, self._h), pygame.SRCALPHA)
         panel.fill((15, 25, 60, 220))
         pygame.draw.rect(panel, (90, 110, 160), panel.get_rect(), 2)
-
-        entries = self._entries()
-        per_p = (self._h - 5) // self._font.get_linesize()
-
-        start = max(0, min(self._index - per_p // 2, len(entries) - per_p))
+        entries: list[Path] | list[str] = self._entries()
+        per_p: int = (self._h - 5) // self._font.get_linesize()
+        start: int = max(
+            0, min(self._index - per_p // 2, len(entries) - per_p))
         start = max(0, start)
-        visible = entries[start:start + per_p]
+        visible: list[Path] | list[str] = entries[start:start + per_p]
 
         y = self._h // 4
         for i, e in enumerate(visible, start=start):
-            label = e if self._folder is None else e.stem
+            label: Path | str = ''
+            if isinstance(e, Path):
+                label = e.stem
+            else:
+                label = str(e)
             if label == 'challenger' or label == '01_the_impossible_dream':
-                tint = (pygame.time.get_ticks() / 700) % 1.0
+                tint = (get_ticks() / 700) % 1.0
                 r, g, b = colorsys.hsv_to_rgb(tint, 0.95, 1.0)
-                color = (
-                    pygame.Color(int(r * 255), int(g * 255), int (b * 255)))
+                color: Color | tuple[int, int, int] = (
+                    pygame.Color(int(r * 255), int(g * 255), int(b * 255)))
             else:
                 color = (
                     (255, 230, 120) if i == self._index else (200, 210, 240))
             panel.blit(self._font.render(
-                ("> " if i == self._index else "  ") + label,
-                True, color), (12, y))
+                ("> " if i == self._index else "  ") +
+                str(label), True, color), (12, y))
             y += self._font.get_linesize()
         self._screen.blit(panel, self._rect)
 
+
 class Layout():
     def __init__(self, data: Data) -> None:
-        self._w, self._h = self._screen.get_size()
+        self._w: int = self._screen.get_size()[0]
+        self._h: int = self._screen.get_size()[1]
         self._drones: list[Drone] = []
-        self._bg: pygame.Surface = pygame.image.load(
-            'src/images/water.png')
-        self._title: pygame.Surface = pygame.image.load(
-            'src/images/fly-in.png')
-        self._hub: pygame.Surface = pygame.image.load(
-            'src/images/hub4.png')
-        self._hub_d: pygame.Surface = pygame.image.load(
-            'src/images/detail_hub.png')
-        self._drone_img = pygame.image.load(
-            'src/images/drone.png')
-        self._title_scale = pygame.transform.scale(
+        self._bg: Surface = load('src/images/water.png')
+        self._title: Surface = load('src/images/fly-in.png')
+        self._hub: Surface = load('src/images/hub4.png')
+        self._hub_d: Surface = load('src/images/detail_hub.png')
+        self._drone_img: Surface = load('src/images/drone.png')
+        self._title_scale: Surface = scale(
             self._title, (self._w // 4.14, self._h // 13.09))
-        self._background = (pygame.transform.smoothscale(
+        self._background: Surface = (smoothscale(
             self._bg, (self._w, self._h)))
-        self._drone_surf = pygame.transform.scale(
+        self._drone_surf = scale(
             self._drone_img, (self._w/24, self._h/28))
-        self._min_x: int = 0; self._min_y: int = 0
-        self._off_x: float = 0; self._off_y: float = 0
-        self._dist_x: float = 0; self._dist_y: float = 0
+        self._min_x: int = 0
+        self._min_y: int = 0
+        self._off_x: float = 0
+        self._off_y: float = 0
+        self._dist_x: float = 0
+        self._dist_y: float = 0
         self._data: Data = data
 
     @property
-    def _screen(self):
-        return pygame.display.get_surface()
-    
-    def load_map(self, data: Data):
+    def _screen(self) -> Surface:
+        return get_surface()
+
+    def load_map(self, data: Data) -> None:
         self._data = data
         xs = [h.x for h in data.total_hubs]
         ys = [h.y for h in data.total_hubs]
@@ -157,14 +172,13 @@ class Layout():
                                     self.world_to_screen(h2.x, h2.y)))
         self._hub_cache: dict[str, pygame.Surface] = {}
 
-
-    def resize(self, w: int, h: int):
+    def resize(self, w: int, h: int) -> None:
         self._w, self._h = w, h
-        self._background = pygame.transform.smoothscale(
+        self._background = smoothscale(
             self._bg, (w, h))
-        self._title_scale = pygame.transform.scale(
+        self._title_scale = scale(
             self._title, (w // 4.14, h // 13.09))
-        self._drone_surf = pygame.transform.scale(
+        self._drone_surf = scale(
             self._drone_img, (w // 24, h // 28))
         self.load_map(self._data)
 
@@ -177,29 +191,31 @@ class Layout():
         details = self._hub_d
         size = int(min(self._dist_x, self._dist_y) * 0.6)
         size = max(20, min(80, size))
-        hub = pygame.transform.smoothscale(hub, (size, size))
-        details = pygame.transform.smoothscale(details, (size, size))
+        hub = smoothscale(hub, (size, size))
+        details = smoothscale(details, (size, size))
         return ((hub, details))
+
 
 class Draw:
     from data import Hub
-    def __init__(self, layout: Layout, simulation: Simulation):
+
+    def __init__(self, layout: Layout, simulation: Simulation) -> None:
         self._layout: Layout = layout
-        self._font = pygame.font.Font('src/images/determination.ttf', 20)
-        self._map_txt = ""
-        self._turn = 0
-        self._sim = simulation
+        self._font: Font = Font('src/images/determination.ttf', 20)
+        self._map_txt: str = ""
+        self._turn: int = 0
+        self._sim: Simulation = simulation
 
     @property
-    def _screen(self):
-        return pygame.display.get_surface()
-    
-    def background(self):
+    def _screen(self) -> Surface:
+        return get_surface()
+
+    def background(self) -> None:
         self._screen.blit(self._layout._background, (0, 0))
 
-    def title(self):
+    def title(self) -> None:
         w, h = self._layout._w, self._layout._h
-        rect = self._layout._title_scale.get_rect(
+        rect: Rect = self._layout._title_scale.get_rect(
             center=(w // 2, h // 14))
         self._screen.blit(self._layout._title_scale, rect)
 
@@ -208,7 +224,7 @@ class Draw:
             pygame.draw.line(self._screen, 'black', a, b, 5)
             pygame.draw.line(self._screen, 'white', a, b, 1)
 
-    def tinted(self, color: str) -> pygame.Surface:
+    def tinted(self, color: str) -> Surface:
         if color == 'rainbow':
             return self._rainbow()
         if color not in self._layout._hub_cache:
@@ -220,59 +236,60 @@ class Draw:
             img.blit(self._layout._cp_details, (0, 0))
             self._layout._hub_cache[color] = img
         return (self._layout._hub_cache[color])
-    
-    def _rainbow(self) -> pygame.Surface:
-        tint = (pygame.time.get_ticks() / 700) % 1.0
+
+    def _rainbow(self) -> Surface:
+        tint = (get_ticks() / 700) % 1.0
         r, g, b = colorsys.hsv_to_rgb(tint, 0.95, 1.0)
         img = self._layout._cp_hub.copy()
         img.fill(
-            pygame.Color(int(r * 255), int(g * 255), int (b * 255)),
+            pygame.Color(int(r * 255), int(g * 255), int(b * 255)),
             special_flags=pygame.BLEND_RGBA_MULT)
         img.blit(self._layout._cp_details, (0, 0))
         return img
 
-    def _draw_hub(self, hub_data: Hub):
+    def _draw_hub(self, hub_data: Hub) -> None:
         color = hub_data.meta_data.color or 'grey'
         img = self.tinted(color)
         pos = self._layout.world_to_screen(hub_data.x, hub_data.y)
         self._screen.blit(img, img.get_rect(center=pos))
 
-    def hub(self):
+    def hub(self) -> None:
         for i in range(len(self._layout._data.hub)):
             self._draw_hub(self._layout._data.hub[i])
         self._draw_hub(self._layout._data.start_hub)
         self._draw_hub(self._layout._data.end_hub)
 
-    def display_drone(self, dt):
-        drones = self._sim._drones
+    def display_drone(self, dt: float) -> None:
+        drones: list[Drone] = self._sim._drones
         for d in drones:
             d.animate(dt)
             px, py = self._layout.world_to_screen(d.x, d.y)
             rect = self._layout._drone_surf.get_rect(center=(px, py - 5))
             self._screen.blit(self._layout._drone_surf, rect)
 
-    def resize_font(self):
+    def resize_font(self) -> None:
         size = max(5, self._screen.get_height() // 36)
-        self._font = pygame.font.Font('src/images/determination.ttf', size)
+        self._font = Font('src/images/determination.ttf', size)
 
-    def set_map_name(self, filepath: Path):
+    def set_map_name(self, filepath: Path) -> None:
         self._map_txt = filepath.parent.name + '/ ' + filepath.stem
 
-    def map_name(self):
+    def map_name(self) -> None:
         w, h = self._screen.get_width(), self._screen.get_height()
         surf = self._font.render(self._map_txt, False, 'white')
-        self._screen.blit(surf,(w // 50, h - (h // 20)))
+        self._screen.blit(surf, (w // 50, h - (h // 20)))
 
-    def reset_turn(self):
+    def reset_turn(self) -> None:
         self._turn = 0
 
-    def increase_turn(self):
+    def increase_turn(self) -> None:
         self._turn += 1
 
-    def turn(self):
+    def turn(self) -> None:
         w, h = self._screen.get_width(), self._screen.get_height()
         surf = self._font.render(f'turns: {self._turn}', False, 'white')
-        self._screen.blit(surf,(w // 1.15, h / 20))
+        self._screen.blit(surf, (w // 1.15, h / 20))
+
 
 def _draw(draw: Draw, dt: float) -> None:
     draw.background()
@@ -281,25 +298,26 @@ def _draw(draw: Draw, dt: float) -> None:
     draw.hub()
     draw.display_drone(dt)
 
+
 def visualizer(data: Data, filepath: str) -> None:
     pygame.init()
-    pygame.display.set_caption("Fly-in")
-    icon = pygame.image.load('src/images/icon.png')
-    pygame.display.set_icon(icon)
-    screen: pygame.Surface = (pygame.display.set_mode(
+    set_caption("Fly-in")
+    icon = load('src/images/icon.png')
+    set_icon(icon)
+    screen: Surface = (set_mode(
         (1280, 720), pygame.RESIZABLE))
-    font = pygame.font.Font('src/images/determination.ttf', 20)
+    font = Font('src/images/determination.ttf', 20)
 
-    sim = Simulation(data)
-    fly_in = Layout(data)
+    sim: Simulation = Simulation(data)
+    fly_in: Layout = Layout(data)
     fly_in.load_map(data)
     fly_in.resize(*screen.get_size())
-    draw = Draw(fly_in, sim)
-    menu = Menu(font)
+    draw: Draw = Draw(fly_in, sim)
+    menu: Menu = Menu(font)
 
     draw.set_map_name(Path(filepath))
-    running = True
-    clock = pygame.time.Clock()
+    running: bool = True
+    clock: Clock = Clock()
     dt: float = 0
     while running:
         for event in pygame.event.get():
@@ -309,17 +327,16 @@ def visualizer(data: Data, filepath: str) -> None:
                 w = max(400, event.w)
                 h = max(300, event.h)
                 if (w, h) != (event.w, event.h):
-                    pygame.display.set_mode((w, h), pygame.RESIZABLE)
+                    set_mode((w, h), pygame.RESIZABLE)
                 fly_in.resize(w, h)
                 menu._resize(*screen.get_size())
                 draw.resize_font()
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_f:
                 if screen.get_flags() & pygame.FULLSCREEN:
-                    screen = pygame.display.set_mode(
-                        (1280, 720), pygame.RESIZABLE)
+                    screen = set_mode((1280, 720), pygame.RESIZABLE)
                 else:
-                    info = pygame.display.Info()
-                    screen = pygame.display.set_mode(
+                    info = Info()
+                    screen = set_mode(
                         (info.current_w, info.current_h), pygame.FULLSCREEN)
                 fly_in.resize(*screen.get_size())
                 menu._resize(*screen.get_size())
@@ -342,6 +359,6 @@ def visualizer(data: Data, filepath: str) -> None:
         menu.draw()
         draw.map_name()
         draw.turn()
-        pygame.display.update()
+        update()
         dt = clock.tick(60) / 1000
     pygame.quit()

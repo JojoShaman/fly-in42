@@ -37,6 +37,7 @@ def _parse_metadata(raw: str) -> Metadata:
 def _parse_drones(line: str) -> int:
     return int(line.split(':')[1])
 
+
 def _parse_hub(line: str) -> Hub:
     body = line.split(':')[1]
     segments = [part for part in body.split('[') if part.strip()]
@@ -47,6 +48,7 @@ def _parse_hub(line: str) -> Hub:
         y=int(y),
         meta_data=_parse_metadata(segments[1].rstrip(']')),
     )
+
 
 def _parse_connection(line: str) -> Connection:
     tokens = line.split(': ')[1].split(' ')
@@ -121,9 +123,9 @@ class Parsing:
                     self.connections.append(_parse_connection(line))
             except ValidationError as exc:
                 errors.extend(err['msg'] for err in exc.errors())
-        if self.start_hub == None:
+        if self.start_hub is None:
             raise ValueError("start_hub cannot be None")
-        if self.end_hub == None:
+        if self.end_hub is None:
             raise ValueError("end_hub cannot be None")
         self.total_hubs.append(self.start_hub)
         for hub in self.hub:

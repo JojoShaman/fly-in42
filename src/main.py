@@ -1,6 +1,8 @@
-from parsing import Parsing
-from render import visualizer
-import sys
+import os
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
+from parsing import Parsing  # noqa: E402
+from render import visualizer  # noqa: E402
+import sys  # noqa: E402
 
 if __name__ == "__main__":
     try:
