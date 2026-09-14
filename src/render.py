@@ -127,11 +127,11 @@ class Layout():
         self._hub: Surface = load('src/images/hub4.png')
         self._hub_d: Surface = load('src/images/detail_hub.png')
         self._drone_img: Surface = load('src/images/drone.png')
-        self._title_scale: Surface = scale(
+        self.title_scale: Surface = scale(
             self._title, (self._w // 4.14, self._h // 13.09))
-        self._background: Surface = (smoothscale(
+        self.background: Surface = (smoothscale(
             self._bg, (self._w, self._h)))
-        self._drone_surf = scale(
+        self.drone_surf = scale(
             self._drone_img, (self._w/24, self._h/28))
         self._min_x: int = 0
         self._min_y: int = 0
@@ -139,16 +139,16 @@ class Layout():
         self._off_y: float = 0
         self._dist_x: float = 0
         self._dist_y: float = 0
-        self._data: Data = data
+        self.data: Data = data
 
     @property
     def _screen(self) -> Surface:
         return get_surface()
 
     def load_map(self, data: Data) -> None:
-        self._data = data
+        self.data = data
         xs = [h.x for h in data.total_hubs]
-        ys = [h.y for h in data.total_hubs]
+        ys = [(h.y * -1) for h in data.total_hubs]
         self._min_x, self._min_y = min(xs), min(ys)
         span_x = max(1, max(xs) - self._min_x)
         r_span_y = max(ys) - self._min_y
@@ -162,29 +162,29 @@ class Layout():
         self._dist_y = min(available_y / span_y, 250)
         self._off_x = side_e + (available_x - span_x * self._dist_x) / 2
         self._off_y = high_e + (available_y - r_span_y * self._dist_y) / 2
-        self._cp_hub, self._cp_details = self.scale_hub()
-        self._lines: list[tuple[tuple[int, int], tuple[int, int]]] = []
+        self.cp_hub, self.cp_details = self.scale_hub()
+        self.lines: list[tuple[tuple[int, int], tuple[int, int]]] = []
         lookup = {h.name: h for h in data.total_hubs}
         for c in data.connection:
             h1, h2 = lookup.get(c.name1), lookup.get(c.name2)
             if h1 and h2:
-                self._lines.append((self.world_to_screen(h1.x, h1.y),
-                                    self.world_to_screen(h2.x, h2.y)))
-        self._hub_cache: dict[str, pygame.Surface] = {}
+                self.lines.append((self.world_to_screen(h1.x, h1.y),
+                                   self.world_to_screen(h2.x, h2.y)))
+        self.hub_cache: dict[str, pygame.Surface] = {}
 
     def resize(self, w: int, h: int) -> None:
         self._w, self._h = w, h
-        self._background = smoothscale(
+        self.background = scale(
             self._bg, (w, h))
-        self._title_scale = scale(
+        self.title_scale = scale(
             self._title, (w // 4.14, h // 13.09))
-        self._drone_surf = scale(
+        self.drone_surf = scale(
             self._drone_img, (w // 24, h // 28))
-        self.load_map(self._data)
+        self.load_map(self.data)
 
     def world_to_screen(self, x: float, y: float) -> tuple[int, int]:
         return (int((x - self._min_x) * self._dist_x + self._off_x),
-                int((y - self._min_y) * self._dist_y + self._off_y))
+                int(((y * -1) - self._min_y) * self._dist_y + self._off_y))
 
     def scale_hub(self) -> tuple[pygame.Surface, pygame.Surface]:
         hub = self._hub
@@ -204,6 +204,7 @@ class Draw:
         self._font: Font = Font('src/images/determination.ttf', 20)
         self._map_txt: str = ""
         self._turn: int = 0
+        self._avg_turn: float = 0
         self._sim: Simulation = simulation
 
     @property
@@ -211,40 +212,40 @@ class Draw:
         return get_surface()
 
     def background(self) -> None:
-        self._screen.blit(self._layout._background, (0, 0))
+        self._screen.blit(self._layout.background, (0, 0))
 
     def title(self) -> None:
-        w, h = self._layout._w, self._layout._h
-        rect: Rect = self._layout._title_scale.get_rect(
+        w, h = self._screen.get_width(), self._screen.get_height()
+        rect: Rect = self._layout.title_scale.get_rect(
             center=(w // 2, h // 14))
-        self._screen.blit(self._layout._title_scale, rect)
+        self._screen.blit(self._layout.title_scale, rect)
 
     def connections(self) -> None:
-        for a, b in self._layout._lines:
+        for a, b in self._layout.lines:
             pygame.draw.line(self._screen, 'black', a, b, 5)
             pygame.draw.line(self._screen, 'white', a, b, 1)
 
     def tinted(self, color: str) -> Surface:
         if color == 'rainbow':
             return self._rainbow()
-        if color not in self._layout._hub_cache:
+        if color not in self._layout.hub_cache:
             rgb = pygame.Color(color)
             rgb = pygame.Color(
                 max(rgb.r, 35), max(rgb.g, 35), max(rgb.b, 35))
-            img = self._layout._cp_hub.copy()
+            img = self._layout.cp_hub.copy()
             img.fill(rgb, special_flags=pygame.BLEND_RGBA_MULT)
-            img.blit(self._layout._cp_details, (0, 0))
-            self._layout._hub_cache[color] = img
-        return (self._layout._hub_cache[color])
+            img.blit(self._layout.cp_details, (0, 0))
+            self._layout.hub_cache[color] = img
+        return (self._layout.hub_cache[color])
 
     def _rainbow(self) -> Surface:
         tint = (get_ticks() / 700) % 1.0
         r, g, b = colorsys.hsv_to_rgb(tint, 0.95, 1.0)
-        img = self._layout._cp_hub.copy()
+        img = self._layout.cp_hub.copy()
         img.fill(
             pygame.Color(int(r * 255), int(g * 255), int(b * 255)),
             special_flags=pygame.BLEND_RGBA_MULT)
-        img.blit(self._layout._cp_details, (0, 0))
+        img.blit(self._layout.cp_details, (0, 0))
         return img
 
     def _draw_hub(self, hub_data: Hub) -> None:
@@ -254,18 +255,18 @@ class Draw:
         self._screen.blit(img, img.get_rect(center=pos))
 
     def hub(self) -> None:
-        for i in range(len(self._layout._data.hub)):
-            self._draw_hub(self._layout._data.hub[i])
-        self._draw_hub(self._layout._data.start_hub)
-        self._draw_hub(self._layout._data.end_hub)
+        for i in range(len(self._layout.data.hub)):
+            self._draw_hub(self._layout.data.hub[i])
+        self._draw_hub(self._layout.data.start_hub)
+        self._draw_hub(self._layout.data.end_hub)
 
     def display_drone(self, dt: float) -> None:
-        drones: list[Drone] = self._sim._drones
+        drones: list[Drone] = self._sim.drones
         for d in drones:
             d.animate(dt)
             px, py = self._layout.world_to_screen(d.x, d.y)
-            rect = self._layout._drone_surf.get_rect(center=(px, py - 5))
-            self._screen.blit(self._layout._drone_surf, rect)
+            rect = self._layout.drone_surf.get_rect(center=(px, py - 5))
+            self._screen.blit(self._layout.drone_surf, rect)
 
     def resize_font(self) -> None:
         size = max(5, self._screen.get_height() // 36)
@@ -288,7 +289,21 @@ class Draw:
     def turn(self) -> None:
         w, h = self._screen.get_width(), self._screen.get_height()
         surf = self._font.render(f'turns: {self._turn}', False, 'white')
-        self._screen.blit(surf, (w // 1.15, h / 20))
+        self._screen.blit(surf, (w // 1.2, h // 20))
+
+    def avg_turn(self) -> None:
+        self._avg_turn = round(sum(turn.step for turn in self._sim.drones)
+                               / self._layout.data.nb_drones, 1)
+        w, h = self._screen.get_width(), self._screen.get_height()
+        surf = self._font.render(
+            f'average turns: {self._avg_turn}', False, 'white')
+        self._screen.blit(surf, (w // 1.2, h // 10))
+
+    def d_per_turn(self) -> None:
+        w, h = self._screen.get_width(), self._screen.get_height()
+        surf = self._font.render(
+            f'drones moved: {self._sim.drones_moved}', False, 'white')
+        self._screen.blit(surf, (w // 1.2, h // 6.5))
 
 
 def _draw(draw: Draw, dt: float) -> None:
@@ -297,29 +312,46 @@ def _draw(draw: Draw, dt: float) -> None:
     draw.connections()
     draw.hub()
     draw.display_drone(dt)
+    draw.map_name()
+    draw.turn()
+    draw.avg_turn()
+    draw.d_per_turn()
 
 
-def visualizer(data: Data, filepath: str) -> None:
+def rendering(data: Data, filepath: str) -> None:
+    from simulation import NoPathFound
     pygame.init()
     set_caption("Fly-in")
     icon = load('src/images/icon.png')
     set_icon(icon)
-    screen: Surface = (set_mode(
-        (1280, 720), pygame.RESIZABLE))
+    set_mode((1280, 720), pygame.RESIZABLE)
     font = Font('src/images/determination.ttf', 20)
-
-    sim: Simulation = Simulation(data)
-    fly_in: Layout = Layout(data)
-    fly_in.load_map(data)
-    fly_in.resize(*screen.get_size())
+    current_map: Data = data
+    map_path: Path = Path(filepath)
+    try:
+        sim: Simulation = Simulation(current_map)
+    except NoPathFound as e:
+        print(e)
+        return
+    fly_in: Layout = Layout(current_map)
+    fly_in.load_map(current_map)
     draw: Draw = Draw(fly_in, sim)
     menu: Menu = Menu(font)
+    last_size: tuple[int, int] = pygame.display.get_surface().get_size()
 
     draw.set_map_name(Path(filepath))
     running: bool = True
+    auto: bool = False
+    next_turn_at: int = 0
     clock: Clock = Clock()
     dt: float = 0
     while running:
+        size: tuple[int, int] = pygame.display.get_surface().get_size()
+        if size != last_size:
+            fly_in.resize(*size)
+            menu._resize(*size)
+            draw.resize_font()
+            last_size = size
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -328,37 +360,56 @@ def visualizer(data: Data, filepath: str) -> None:
                 h = max(300, event.h)
                 if (w, h) != (event.w, event.h):
                     set_mode((w, h), pygame.RESIZABLE)
-                fly_in.resize(w, h)
-                menu._resize(*screen.get_size())
-                draw.resize_font()
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_f:
-                if screen.get_flags() & pygame.FULLSCREEN:
-                    screen = set_mode((1280, 720), pygame.RESIZABLE)
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_f:
+                    if pygame.display.get_surface().get_flags() & pygame.FULLSCREEN:
+                        set_mode((1280, 720), pygame.RESIZABLE)
+                    else:
+                        info = Info()
+                        set_mode(
+                            (info.current_w, info.current_h), pygame.FULLSCREEN)
+                elif event.key == pygame.K_SPACE:
+                    sim.update_drone()
+                    if not all([x.end for x in sim.drones]):
+                        draw.increase_turn()
+                elif event.key == pygame.K_p:
+                    auto = not auto
+                    next_turn_at = pygame.time.get_ticks()
+                elif event.key == pygame.K_r:
+                    try:
+                        new_sim = Simulation(current_map)
+                    except NoPathFound as e:
+                        print(e)
+                    else:
+                        sim = new_sim
+                        fly_in.load_map(current_map)
+                        draw = Draw(fly_in, sim)
+                        draw.set_map_name(map_path)
+                        draw.reset_turn()
                 else:
-                    info = Info()
-                    screen = set_mode(
-                        (info.current_w, info.current_h), pygame.FULLSCREEN)
-                fly_in.resize(*screen.get_size())
-                menu._resize(*screen.get_size())
-                draw.resize_font()
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                sim.update_drone()
-                if not all([x.end for x in sim._drones]):
-                    draw.increase_turn()
-            else:
-                chosen = menu.handle(event)
-                if chosen:
-                    sim = Simulation(Parsing().parse(str(chosen)))
-                    fly_in.load_map(Parsing().parse(str(chosen)))
-                    draw = Draw(fly_in, sim)
-                    draw.resize_font()
-                    draw.set_map_name(chosen)
-                    draw.reset_turn()
-
+                    chosen: Path | None = menu.handle(event)
+                    if chosen:
+                        new_data: Data = Parsing().parse(str(chosen))
+                        try:
+                            new_sim = Simulation(new_data)
+                        except NoPathFound as e:
+                            print(e)
+                        else:
+                            sim = new_sim
+                            fly_in.load_map(new_data)
+                            draw = Draw(fly_in, sim)
+                            draw.set_map_name(chosen)
+                            draw.reset_turn()
+                            current_map = new_data
+                            map_path = chosen
+        if auto and pygame.time.get_ticks() >= next_turn_at:
+            sim.update_drone()
+            draw.increase_turn()
+            next_turn_at = pygame.time.get_ticks() + 400
+        if all(d.end for d in sim.drones):
+            auto = False
         _draw(draw, dt)
         menu.draw()
-        draw.map_name()
-        draw.turn()
         update()
         dt = clock.tick(60) / 1000
     pygame.quit()

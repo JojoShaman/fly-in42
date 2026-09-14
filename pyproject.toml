@@ -1,7 +1,10 @@
 [project]
 name = "fly-in"
 version = "0.1.0"
-description = "working on it"
+description = "42 project"
+authors = [
+    {name = "srosu", email = "srosu@student.42belgium.be"}
+]
 requires-python = ">=3.10"
 dependencies = [
     "pydantic >= 2.13.4",

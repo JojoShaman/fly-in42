@@ -1,0 +1,67 @@
+# STRESS TEST: CAS LIMITES
+# Teste la robustesse face aux situations degenerees.
+
+nb_drones: 12
+
+start_hub: start 0 0 [color=green]
+
+# Goulot absolu : tout passe par un hub a capacite 1
+hub: needle 1 0 [color=red max_drones=1]
+
+# Impasse profonde : 4 hubs qui ne menent nulle part
+hub: trap1 1 -2 [color=black]
+hub: trap2 2 -2 [color=black]
+hub: trap3 3 -2 [color=black]
+hub: trap4 4 -2 [color=black]
+
+# Chaine de restricted consecutifs
+hub: slow1 2 0 [zone=restricted color=orange max_drones=2]
+hub: slow2 3 0 [zone=restricted color=orange max_drones=2]
+hub: slow3 4 0 [zone=restricted color=orange max_drones=2]
+
+# Boucle fermee qui ne mene a rien d'utile
+hub: ring1 3 2 [color=purple max_drones=2]
+hub: ring2 4 2 [color=purple max_drones=2]
+hub: ring3 5 2 [color=purple max_drones=2]
+hub: ring4 4 3 [color=purple max_drones=2]
+
+# Detour tres long mais large
+hub: long1 2 -4 [color=cyan max_drones=4]
+hub: long2 3 -4 [color=cyan max_drones=4]
+hub: long3 4 -4 [color=cyan max_drones=4]
+hub: long4 5 -4 [color=cyan max_drones=4]
+hub: long5 6 -4 [color=cyan max_drones=4]
+hub: long6 7 -4 [color=cyan max_drones=4]
+
+# Convergence forcee
+hub: gate 8 0 [color=yellow max_drones=1]
+end_hub: goal 9 0 [color=green]
+
+# --- CONNEXIONS ---
+connection: start-needle [max_link_capacity=1]
+connection: start-trap1
+connection: start-long1 [max_link_capacity=4]
+
+connection: trap1-trap2
+connection: trap2-trap3
+connection: trap3-trap4
+
+connection: needle-slow1 [max_link_capacity=2]
+connection: slow1-slow2 [max_link_capacity=2]
+connection: slow2-slow3 [max_link_capacity=2]
+connection: slow3-gate [max_link_capacity=1]
+
+connection: slow1-ring1
+connection: ring1-ring2
+connection: ring2-ring3
+connection: ring3-ring4
+connection: ring4-ring1
+
+connection: long1-long2 [max_link_capacity=4]
+connection: long2-long3 [max_link_capacity=4]
+connection: long3-long4 [max_link_capacity=4]
+connection: long4-long5 [max_link_capacity=4]
+connection: long5-long6 [max_link_capacity=4]
+connection: long6-gate [max_link_capacity=1]
+
+connection: gate-goal [max_link_capacity=1]

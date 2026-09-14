@@ -43,39 +43,61 @@ class Graph:
         return (previous)
 
 
-def find_path(data: Data, start: str,
-              links: dict[tuple[str, str], int] | None = None) -> list[Hub]:
-    link = links or {}
-    g = Graph(len(data.total_hubs))
-    for n, h in enumerate(data.total_hubs):
-        g.add_vertex_data(n, h.name)
-    lookup = {h.name: n for n, h in enumerate(data.total_hubs)}
-    lookhub = {h.name: h for h in data.total_hubs}
-    for c in data.connection:
-        if c.name1 in lookup and c.name2 in lookup:
-            key = ((c.name1, c.name2) if c.name1 < c.name2
-                   else (c.name2, c.name1))
-            h1, h2 = lookup[c.name1], lookup[c.name2]
-            base = 1
-            if lookhub[c.name2].meta_data.zone == Type.restricted:
-                base = 2
-            elif lookhub[c.name2].meta_data.zone == Type.priority:
-                base = 1
-            occupation = (lookhub[c.name2].nb_drones /
-                          max(1, lookhub[c.name2].meta_data.max_drones))
-            weight = base + occupation * 0.5
-            if links is not None:
-                usage = link.get(key, 0)
-                if usage >= c.meta_data.max_link_capacity:
-                    continue
-            g.add_edge(h1, h2, weight)
-    previous = g.dijkstra(start)
-    comes_from = lookup[start]
-    node: int | None = lookup[data.end_hub.name]
-    path: list[Hub] = []
-    while node is not None:
-        path.append(data.total_hubs[node])
-        node = previous[node]
-    if not path or path[-1] is not data.total_hubs[comes_from]:
-        return []
-    return list(reversed(path))
+class Path:
+    def __init__(self, data: Data) -> None:
+        self._data: Data = data
+        self.lookup: dict[str, int] = {
+            h.name: n for n, h in enumerate(data.total_hubs)}
+        self.lookhub: dict[str, Hub] = {
+            h.name: h for h in data.total_hubs}
+
+    def compute_multi(self) -> float:
+        flow = 0
+        for c in self._data.connection:
+            if self._data.start_hub.name in (c.name1, c.name2):
+                neighbour = (
+                    c.name2
+                    if c.name1 == self._data.start_hub.name else c.name1)
+                hub = self.lookhub[neighbour]
+                flow += min(
+                    c.meta_data.max_link_capacity, hub.meta_data.max_drones)
+        return 0.5 if flow <= 1 else 5.1
+
+    def find_path(self, start: str,
+                  links: dict[
+                      tuple[str, str], int] | None = None) -> list[Hub]:
+        link = links or {}
+        g = Graph(len(self._data.total_hubs))
+        for n, h in enumerate(self._data.total_hubs):
+            g.add_vertex_data(n, h.name)
+        for c in self._data.connection:
+            if c.name1 in self.lookup and c.name2 in self.lookup:
+                key = ((c.name1, c.name2) if c.name1 < c.name2
+                       else (c.name2, c.name1))
+                h1, h2 = self.lookup[c.name1], self.lookup[c.name2]
+                hub_zone: Type = self.lookhub[c.name2].meta_data.zone
+                hub_max_d: int = self.lookhub[c.name2].meta_data.max_drones
+                base: float = (2 if hub_zone == Type.restricted else 1)
+                occupation = (self.lookhub[c.name2].nb_drones /
+                              max(1, hub_max_d))
+                multi = (self.compute_multi()
+                         * (0.5 if hub_zone == Type.priority else 1.0))
+                weight = base + occupation * multi
+                if links is not None:
+                    usage = link.get(key, 0)
+                    if usage >= c.meta_data.max_link_capacity:
+                        continue
+                if self.lookhub[c.name1].meta_data.zone is not Type.blocked:
+                    g.add_edge(h1, h2, weight)
+                if self.lookhub[c.name2].meta_data.zone is not Type.blocked:
+                    g.add_edge(h2, h1, weight)
+        previous = g.dijkstra(start)
+        comes_from = self.lookup[start]
+        node: int | None = self.lookup[self._data.end_hub.name]
+        path: list[Hub] = []
+        while node is not None:
+            path.append(self._data.total_hubs[node])
+            node = previous[node]
+        if not path or path[-1] is not self._data.total_hubs[comes_from]:
+            return []
+        return list(reversed(path))

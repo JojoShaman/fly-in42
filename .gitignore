@@ -1,0 +1,6 @@
+.vscode
+poetry.lock
+__pycache__
+.mypy_cache
+.DS_Store
+.venv
