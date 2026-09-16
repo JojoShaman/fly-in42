@@ -12,6 +12,7 @@ from data import (
 KEYWORDS = ['nb_drones', 'start_hub', 'hub', 'end_hub', 'connection']
 
 _ZONES = {
+    'normal' : Type.normal,
     'restricted': Type.restricted,
     'priority': Type.priority,
     'blocked': Type.blocked,
@@ -21,17 +22,19 @@ RED = '\033[31m'
 RESET = '\033[0m'
 
 def _parse_metadata(raw: str) -> Metadata:
-    meta = Metadata()
+    zone: Type = _ZONES['normal']
+    color = 'none'
+    max_drones = '1'
     for token in raw.split():
         key, value = token.split('=')
         if key == 'zone':
             if value in _ZONES:
-                meta.zone = _ZONES[value]
+                zone = _ZONES[value]
         elif key == 'color':
-            meta.color = value
+            color = value
         elif key == 'max_drones':
-            meta.max_drones = value  #type: ignore
-    return meta
+            max_drones = value  #type: ignore
+    return Metadata(zone=zone, color=color, max_drones=max_drones)  # type: ignore
 
 
 def _parse_drones(line: str) -> int:
