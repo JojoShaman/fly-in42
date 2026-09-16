@@ -1,4 +1,3 @@
-from collections import OrderedDict
 from pydantic import ValidationError
 import sys
 from data import (
@@ -31,22 +30,42 @@ def _parse_metadata(raw: str) -> Metadata:
         elif key == 'color':
             meta.color = value
         elif key == 'max_drones':
-            meta.max_drones = int(value)
+            meta.max_drones = value  #type: ignore
     return meta
 
 
 def _parse_drones(line: str) -> int:
-    return int(line.split(':')[1])
+    nb = line.split(':')[1]
+    try:
+        ret = int(nb)
+    except ValueError as e:
+        raise ValueError(f"'nb_drones' {e}")
+    if ret <= 0:
+        raise ValueError("'nb_drones' should be a positive integer.")
+    return ret
 
 
 def _parse_hub(line: str) -> Hub:
     body = line.split(':')[1]
     segments = [part for part in body.split('[') if part.strip()]
-    name, x, y = segments[0].strip().split()
+    splited = segments[0].strip().split()
+    name = splited[0]
+    try:
+        x = splited[1]
+    except ValueError as e:
+        raise ValueError("'x'", e)
+    except IndexError:
+        raise ValueError("'x' field cannot be empty")
+    try:
+        y = splited[2]
+    except ValueError as e:
+        raise ValueError("'x'", e)
+    except IndexError:
+        raise ValueError("'y' field cannot be empty")
     return Hub(
         name=name,
-        x=int(x),
-        y=int(y),
+        x=x,  # type: ignore
+        y=y,  # type: ignore
         meta_data=_parse_metadata(segments[1].rstrip(']')),
     )
 
@@ -69,6 +88,18 @@ def _read_lines(file: str) -> list[tuple[str, int]]:
         (line, n) for n, line in enumerate(content.splitlines(), start=1)
         if line.strip() and not line.startswith('#')
     ]
+
+def check(file: str) -> tuple[bool, bool]:
+    with open(file, 'r') as f:
+        content = f.read()
+    comments: bool = False
+    empty_lines: bool = False
+    for line in content.splitlines():
+        if not line.strip():
+            empty_lines = True
+        elif line.startswith('#'):
+            comments = True
+    return((comments, empty_lines))
 
 
 class ErrorManagement():
@@ -117,8 +148,8 @@ class ErrorManagement():
                 last_key = k
 
     def _missing_errors(self, seen: dict[str, list[tuple[int, str]]]) -> None:
-        nb: int = 0
         for key in ('nb_drones', 'start_hub', 'end_hub'):
+            nb: int = 0
             if not key in seen:
                 self.errors.append((f'  {RED}➜{RESET} missing "{key}"', 0))
                 nb += 1
@@ -143,7 +174,7 @@ class ErrorManagement():
 
 class Parsing:
     def __init__(self) -> None:
-        self.nb_drones = 0
+        self.nb_drones: int = 0
         self.start_hub: Hub | None = None
         self.hub: list[Hub] = []
         self.end_hub: Hub | None = None
@@ -162,20 +193,32 @@ class Parsing:
                 else:
                     self.handle.nb_errors += 1
                     self.handle.errors.append(
-                        (f'  {RED}➜{RESET} line {n}: keyword "{key}" is'
-                        ' not valid. Perhaps you meant '
-                        f'"{self.handle.find_similar(key)}"?', n))
+                        (f"  {RED}➜{RESET} line {n}: keyword '{key}' is"
+                        " not valid. Perhaps you meant "
+                        f"'{self.handle.find_similar(key)}'?", n))
             self.handle._error_manager(seen)
             if self.handle.errors:
                 self._report(self.handle, file)
                 sys.exit()
         else:
-            self.handle.errors.append((f'  {RED}➜{RESET} Map file is empty', 0))
+            comments, empty = check(file)
+            if comments or empty:
+                status: str = ''
+                if comments and empty:
+                    status = 'comments and empty lines'
+                else:
+                    status = 'comments' if comments else 'empty lines'
+                self.handle.errors.append(
+                    (f'  {RED}➜{RESET} Map file '
+                     f'contains nothing but {status}', 0))
+            else:
+                self.handle.errors.append(
+                    (f'  {RED}➜{RESET} Map file is empty', 0))
             self.handle.nb_errors += 1
             self._report(self.handle, file)
             sys.exit()
 
-        for line, _ in lines:
+        for line, number in lines:
             try:
                 if line.startswith('nb_drones'):
                     self.nb_drones = _parse_drones(line)
@@ -188,11 +231,18 @@ class Parsing:
                 elif line.startswith('connection'):
                     self.connections.append(_parse_connection(line))
             except ValidationError as e:
-                self.handle.errors.extend((err['msg'], 0) for err in e.errors())
-        if self.start_hub is None:
-            raise ValueError("  start_hub cannot be None")
-        if self.end_hub is None:
-            raise ValueError("  end_hub cannot be None")
+                self.handle.nb_errors += len(e.errors())
+                for err in e.errors():
+                    field = '.'.join(str(p) for p in err['loc'])
+                    self.handle.errors.append(
+                        (f"  {RED}➜{RESET} line "
+                         f"{number}: '{field}' {err['msg']}", number))
+            except ValueError as e:
+                self.handle.nb_errors += 1
+                self.handle.errors.append((f"  {RED}➜{RESET} line {number}: {e}", 0))
+        if self.start_hub is None or self.end_hub is None:
+            self._report(self.handle, file)
+            sys.exit() 
         self.total_hubs.append(self.start_hub)
         for hub in self.hub:
             self.total_hubs.append(hub)
@@ -200,14 +250,15 @@ class Parsing:
         if self.handle.errors:
             self._report(self.handle, file)
             sys.exit()
-        return (Data(
+        return (
+            Data(
             nb_drones=self.nb_drones,
             start_hub=self.start_hub,
             hub=self.hub,
             end_hub=self.end_hub,
             connection=self.connections,
             total_hubs=self.total_hubs)
-            )
+        )
 
     @staticmethod
     def _report(handle: ErrorManagement, file: str) -> None:
@@ -218,3 +269,4 @@ class Parsing:
               f' parse {file}{RESET}')
         for error , _ in handle.errors:
             print(error)
+        
