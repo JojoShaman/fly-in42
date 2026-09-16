@@ -189,8 +189,6 @@ class Simulation:
                     drone.path = new_path
                     is_blocked = self.blocked(drone)
             if len(drone.path) == 1:
-                if drone.path[0].name == self._data.end_hub.name:
-                    drone.end = True
                 continue
             next_h = drone.path[1]
             if not is_blocked:
@@ -213,6 +211,8 @@ class Simulation:
                     new_path = self._path_obj.find_path(
                         next_h.name, self.link_usage)
                     drone.path = new_path if new_path else [next_h]
+                    if drone.path[0].name == self._data.end_hub.name:
+                        drone.end = True
                     drone.target = 1.0
                     drone.turn = 1
                 self.in_motion[drone] = next_h

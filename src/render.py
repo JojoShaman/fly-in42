@@ -12,6 +12,7 @@ from pygame.event import Event
 from pygame.font import Font
 from pygame.image import load
 from pygame.transform import scale, smoothscale
+from pygame.mixer import Sound
 from data import Data
 from parsing import Parsing
 from pathlib import Path
@@ -23,6 +24,13 @@ class Menu:
     def __init__(self, font: Font) -> None:
         self._font: Font = font
         self._files: list[Path] = sorted(Path('maps').rglob('*.txt'))
+        self._music: bool = False
+        self._last_folder: str = ''
+        self._menu_sfx: Sound = pygame.mixer.Sound('src/sounds/beep.mp3')
+        self._menu_sfx.set_volume(0.2)
+        self._select_sfx: Sound = pygame.mixer.Sound('src/sounds/select.wav')
+        self._select_sfx.set_volume(0.3)
+        self._challenge: Sound = pygame.mixer.Sound('src/sounds/soundtrack.mp3')
         self._index: int = 0
         self._visible: bool = False
         self._w: int = self._screen.get_width() // 4
@@ -41,8 +49,8 @@ class Menu:
 
     def _resize(self, w: int, h: int) -> None:
         self._w, self._h = w // 4, h // 16
-        self._rect = Rect(self._screen.get_width() - self._w - 20,
-                          self._screen.get_height() - self._h - 20,
+        margin = h // 36
+        self._rect = Rect(w - self._w - margin, h - self._h - margin,
                           self._w, self._h)
         size: int = max(5, self._screen.get_height() // 36)
         self._font = Font('src/images/determination.ttf', size)
@@ -57,6 +65,7 @@ class Menu:
             return None
         if event.key == pygame.K_ESCAPE:
             if not self._visible:
+                self._menu_sfx.play()
                 self._visible = True
             elif self._folder is not None:
                 self._folder = None
@@ -67,20 +76,44 @@ class Menu:
             return None
         elif event.key == pygame.K_DOWN:
             self._index = (self._index + 1) % len(self._entries())
+            self._select_sfx.play()
         elif event.key == pygame.K_UP:
             self._index = (self._index - 1) % len(self._entries())
+            self._select_sfx.play()
         elif event.key == pygame.K_RETURN:
+            self._menu_sfx.play()
             if self._folder is None:
                 self._folder = list(self._tree.keys())[self._index]
                 self._index = 0
             else:
                 folder = self._folder
+                self._last_folder = folder
                 self._visible = False
                 self._folder = None
                 index = self._index
                 self._index = 0
                 return self._tree[folder][index]
+        if not self._folder:
+            if self._index == 0:
+                self._challenge.set_volume(0.3)
+                if not self._music:
+                    self.play_music(True)
+            else:
+                if self._music:
+                    if not self._last_folder == 'challenger':
+                        self.play_music(False)
+                    self._challenge.set_volume(0.17)
+        elif self._folder and not self._folder == 'challenger':
+            self.play_music(False)
         return None
+
+    def play_music(self, toggle: bool) -> None:
+        if toggle:
+            self._challenge.play(-1)
+            self._music = True
+        else:
+            self._challenge.stop()
+            self._music = False
 
     def draw(self) -> None:
         if not self._visible:
@@ -112,7 +145,7 @@ class Menu:
                     (255, 230, 120) if i == self._index else (200, 210, 240))
             panel.blit(self._font.render(
                 ("> " if i == self._index else "  ") +
-                str(label), True, color), (12, y))
+                str(label), False, color), (12, y))
             y += self._font.get_linesize()
         self._screen.blit(panel, self._rect)
 
@@ -122,17 +155,25 @@ class Layout():
         self._w: int = self._screen.get_size()[0]
         self._h: int = self._screen.get_size()[1]
         self._drones: list[Drone] = []
+        self.blip: Sound = pygame.mixer.Sound('src/sounds/beep.mp3')
+        self.end_of_sim: Sound = pygame.mixer.Sound('src/sounds/delivered.mp3')
+        self.end_of_sim.set_volume(0.1)
+        self.blip.set_volume(0.2)
         self._bg: Surface = load('src/images/water.png')
         self._title: Surface = load('src/images/fly-in.png')
         self._hub: Surface = load('src/images/hub4.png')
         self._hub_d: Surface = load('src/images/detail_hub.png')
         self._drone_img: Surface = load('src/images/drone.png')
+        self.help: Surface = load('src/images/help.png')
+        self.help_size: Rect = self.help_rect()
+        self._help_center: tuple[int, int] = (self._w // 38, self._w // 38)
+        self.scale_help: Surface = scale(self.help, (self.help_size.w, self.help_size.h))
         self.title_scale: Surface = scale(
             self._title, (self._w // 4.14, self._h // 13.09))
-        self.background: Surface = (smoothscale(
+        self.background: Surface = (scale(
             self._bg, (self._w, self._h)))
         self.drone_surf = scale(
-            self._drone_img, (self._w/24, self._h/28))
+            self._drone_img, (self._w//24, self._h//28))
         self._min_x: int = 0
         self._min_y: int = 0
         self._off_x: float = 0
@@ -144,6 +185,15 @@ class Layout():
     @property
     def _screen(self) -> Surface:
         return get_surface()
+
+    def help_rect(self) -> Rect:
+        size = self._w // 38
+        return Rect(size // 2, size // 2, size, size)
+
+    def help_collide(self, increase: bool) -> None:
+        size = self._w // 35 if increase else self._w // 38
+        self.scale_help = scale(self.help, (size, size))
+        self.help_size = self.scale_help.get_rect(center=self.help_rect().center)
 
     def load_map(self, data: Data) -> None:
         self.data = data
@@ -180,6 +230,8 @@ class Layout():
             self._title, (w // 4.14, h // 13.09))
         self.drone_surf = scale(
             self._drone_img, (w // 24, h // 28))
+        self.scale_help = scale(
+            self.help, (self.help_rect().w, self.help_rect().h))
         self.load_map(self.data)
 
     def world_to_screen(self, x: float, y: float) -> tuple[int, int]:
@@ -192,7 +244,7 @@ class Layout():
         size = int(min(self._dist_x, self._dist_y) * 0.6)
         size = max(20, min(80, size))
         hub = smoothscale(hub, (size, size))
-        details = smoothscale(details, (size, size))
+        details = scale(details, (size, size))
         return ((hub, details))
 
 
@@ -201,11 +253,13 @@ class Draw:
 
     def __init__(self, layout: Layout, simulation: Simulation) -> None:
         self._layout: Layout = layout
-        self._font: Font = Font('src/images/determination.ttf', 20)
+        self._font: Font = Font('src/images/determination.ttf', 15)
+        self._panel_font: Font = Font('src/images/determination.ttf', 10)
         self._map_txt: str = ""
         self._turn: int = 0
         self._avg_turn: float = 0
         self._sim: Simulation = simulation
+        self._on_icon: bool = False
 
     @property
     def _screen(self) -> Surface:
@@ -270,7 +324,9 @@ class Draw:
 
     def resize_font(self) -> None:
         size = max(5, self._screen.get_height() // 36)
+        p_size = max(5, self._screen.get_height() // 45)
         self._font = Font('src/images/determination.ttf', size)
+        self._panel_font = Font('src/images/determination.ttf', p_size)
 
     def set_map_name(self, filepath: Path) -> None:
         self._map_txt = filepath.parent.name + '/ ' + filepath.stem
@@ -289,7 +345,8 @@ class Draw:
     def turn(self) -> None:
         w, h = self._screen.get_width(), self._screen.get_height()
         surf = self._font.render(f'turns: {self._turn}', False, 'white')
-        self._screen.blit(surf, (w // 1.2, h // 20))
+        rect = surf.get_rect(topright=(w - w // 25, h // 20))
+        self._screen.blit(surf, rect)
 
     def avg_turn(self) -> None:
         self._avg_turn = round(sum(turn.step for turn in self._sim.drones)
@@ -297,17 +354,55 @@ class Draw:
         w, h = self._screen.get_width(), self._screen.get_height()
         surf = self._font.render(
             f'average turns: {self._avg_turn}', False, 'white')
-        self._screen.blit(surf, (w // 1.2, h // 10))
+        rect = surf.get_rect(topright=(w - w // 33, h // 12))
+        self._screen.blit(surf, rect)
 
     def d_per_turn(self) -> None:
         w, h = self._screen.get_width(), self._screen.get_height()
         surf = self._font.render(
             f'drones moved: {self._sim.drones_moved}', False, 'white')
-        self._screen.blit(surf, (w // 1.2, h // 6.5))
+        rect = surf.get_rect(topright=(w - w // 25, h // 8.5))
+        self._screen.blit(surf, rect)
+
+    def help(self) -> None:
+        self._screen.blit(self._layout.scale_help, self._layout.help_size)
+
+    def help_panel(self) -> None:
+        if not self._layout.help_rect().collidepoint(pygame.mouse.get_pos()):
+            if self._on_icon:
+                self._on_icon = False
+            self._layout.help_collide(False)
+            return
+        if not self._on_icon:
+            self._on_icon = True
+            self._layout.blip.play()
+        self._layout.help_collide(True)
+        lines: list = [
+            "SPACE      next turn",
+            "P               auto play",
+            "R               restart",
+            "F               fullscreen",
+            "ESC           maps menu",
+        ]
+        lh = self._font.get_linesize()
+        margin = lh // 4
+        w = max(self._panel_font.size(t)[0] for t in lines) + 2 * margin
+        h = len(lines) * lh + 2 * margin
+        panel = Surface((w, h), pygame.SRCALPHA)
+        panel.fill((15, 25, 60, 220))
+        pygame.draw.rect(panel, (90, 110, 160), panel.get_rect(), 2)
+        y = margin
+        for t in lines:
+            panel.blit(self._panel_font.render(
+                t, False, (200, 210, 240)), (margin, y))
+            y += lh
+        r = self._layout.help_rect()
+        self._screen.blit(panel, (r.left, r.bottom + 10))
 
 
 def _draw(draw: Draw, dt: float) -> None:
     draw.background()
+    draw.help()
     draw.title()
     draw.connections()
     draw.hub()
@@ -316,16 +411,18 @@ def _draw(draw: Draw, dt: float) -> None:
     draw.turn()
     draw.avg_turn()
     draw.d_per_turn()
+    draw.help_panel()
 
 
 def rendering(data: Data, filepath: str) -> None:
     from simulation import NoPathFound
     pygame.init()
+    pygame.mixer.init()
     set_caption("Fly-in")
     icon = load('src/images/icon.png')
     set_icon(icon)
     set_mode((1280, 720), pygame.RESIZABLE)
-    font = Font('src/images/determination.ttf', 20)
+    font = Font('src/images/determination.ttf', 15)
     current_map: Data = data
     map_path: Path = Path(filepath)
     try:
@@ -338,13 +435,15 @@ def rendering(data: Data, filepath: str) -> None:
     draw: Draw = Draw(fly_in, sim)
     menu: Menu = Menu(font)
     last_size: tuple[int, int] = pygame.display.get_surface().get_size()
-
+    menu._resize(*last_size)
+    draw.resize_font()
     draw.set_map_name(Path(filepath))
     running: bool = True
     auto: bool = False
     next_turn_at: int = 0
     clock: Clock = Clock()
     dt: float = 0
+    delivered: bool = False
     while running:
         size: tuple[int, int] = pygame.display.get_surface().get_size()
         if size != last_size:
@@ -377,36 +476,62 @@ def rendering(data: Data, filepath: str) -> None:
                     next_turn_at = pygame.time.get_ticks()
                 elif event.key == pygame.K_r:
                     try:
-                        new_sim = Simulation(current_map)
+                        parse: Data = Parsing().parse(str(map_path))
+                    except ValueError as e:
+                        print(e)
+                        continue
+                    try:
+                        new_sim = Simulation(parse)
                     except NoPathFound as e:
                         print(e)
                     else:
+                        if delivered:
+                            delivered = False
                         sim = new_sim
                         fly_in.load_map(current_map)
                         draw = Draw(fly_in, sim)
                         draw.set_map_name(map_path)
                         draw.reset_turn()
+                        menu._resize(*size)
+                        draw.resize_font()
+
                 else:
                     chosen: Path | None = menu.handle(event)
                     if chosen:
-                        new_data: Data = Parsing().parse(str(chosen))
+                        try:
+                            new_data: Data = Parsing().parse(str(chosen))
+                        except ValueError as e:
+                            print(e)
+                            continue
                         try:
                             new_sim = Simulation(new_data)
                         except NoPathFound as e:
                             print(e)
                         else:
+                            if auto:
+                                auto = False
+                            if delivered:
+                                delivered = False
                             sim = new_sim
                             fly_in.load_map(new_data)
                             draw = Draw(fly_in, sim)
                             draw.set_map_name(chosen)
                             draw.reset_turn()
+                            menu._resize(*size)
+                            draw.resize_font()
                             current_map = new_data
                             map_path = chosen
         if auto and pygame.time.get_ticks() >= next_turn_at:
-            sim.update_drone()
-            draw.increase_turn()
-            next_turn_at = pygame.time.get_ticks() + 400
+            if not all(d.end for d in sim.drones):
+                sim.update_drone()
+                draw.increase_turn()
+                next_turn_at = pygame.time.get_ticks() + 400
         if all(d.end for d in sim.drones):
+            if not delivered:
+                if menu._music:
+                    menu.play_music(False)
+                fly_in.end_of_sim.play()
+                delivered = True
             auto = False
         _draw(draw, dt)
         menu.draw()

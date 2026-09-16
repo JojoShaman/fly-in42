@@ -6,13 +6,21 @@ from simulation import NoPathFound # noqa: E402
 import sys  # noqa: E402
 
 if __name__ == "__main__":
+    if len(sys.argv) == 2:
+        try:
+            map_p = sys.argv[1]
+        except FileNotFoundError as e:
+            print(e)
+            sys.exit()
+    else:
+        map_p = 'maps/hard/01_maze_nightmare.txt'
     try:
-        data = Parsing().parse('maps/hard/01_maze_nightmare.txt')
+        data = Parsing().parse(map_p)
     except Exception as e:
         print(e)
         sys.exit()
     try:
-        rendering(data, 'maps/hard/01_maze_nightmare.txt')
+        rendering(data, map_p)
     except KeyboardInterrupt:
         print('\nProgram closed successfully')
     except NoPathFound as e:

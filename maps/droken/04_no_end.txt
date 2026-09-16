@@ -1,0 +1,4 @@
+nb_drones: 4
+start_hub: start 0 0 [color=green]
+hub: middle 1 0 [color=blue]
+connection: start-middle

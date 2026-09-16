@@ -1,0 +1,12 @@
+nb_drones: 3
+start_hub: start 0 0 [color=green]
+hub: a 1 0 [color]
+hub: b 2 0 [zone=teleport color=blue]
+hub: c 3 0 [max_drones=-2 color=blue]
+hub: d 4 0 [max_drones=lots]
+end_hub: goal 5 0 [color=green
+connection: start-a
+connection: a-b
+connection: b-c
+connection: c-d
+connection: d-goal

@@ -1,0 +1,4 @@
+nb_drones: 4
+hub: middle 1 0 [color=blue]
+end_hub: goal 2 0 [color=green]
+connection: middle-goal
