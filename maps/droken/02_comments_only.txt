@@ -1,5 +1,0 @@
-# This map contains nothing but comments
-# and blank lines.
-
-#
-

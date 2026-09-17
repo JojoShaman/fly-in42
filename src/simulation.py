@@ -99,8 +99,9 @@ class Simulation:
     def __init__(self, data: Data) -> None:
         self._data = data
         self.link_usage: dict[tuple[str, str], int] = {}
+        self.hubs: dict[str, int] = {h.name : pos for pos, h in enumerate(data.total_hubs)}
         self.link_cap: dict[tuple[str, str], int] = {
-            self.link_key(c.name1, c.name2): c.meta_data.max_link_capacity
+            self.link_key((c.name1, self.hubs[c.name1]), (c.name2, self.hubs[c.name2])): c.meta_data.max_link_capacity
             for c in data.connection}
         self._path_obj: Path = Path(data)
         self._path: list[Hub] = self._path_obj.find_path(data.start_hub.name)
@@ -110,10 +111,10 @@ class Simulation:
             Drone(self._path, n) for n in range(data.nb_drones)]
         self._path[0].nb_drones = data.nb_drones
         self._path[len(self._path) - 1].meta_data.max_drones = data.nb_drones
-        self.in_motion: dict[Drone, Hub] = {}
+        self.in_motion: dict[Drone, str] = {}
         self.drones_moved: int = 0
 
-    def link_key(self, a: str, b: str) -> tuple[str, str]:
+    def link_key(self, a: tuple[str, int], b: tuple[str, int]) -> tuple[str, str]:
         """Build the lookup key identifying a connection.
 
         Connections are bidirectional, so the two names are sorted to give
@@ -126,7 +127,7 @@ class Simulation:
         Returns:
             The two names in alphabetical order.
         """
-        return (a, b) if a < b else (b, a)
+        return (a[0], b[0]) if a[1] < b[1] else (b[0], a[0])
 
     def to_restricted(self, drone: Drone) -> None:
         """Land a drone that spent its extra turn over a restricted hub.
@@ -137,6 +138,7 @@ class Simulation:
         Args:
             drone: A drone whose turn state is 2.
         """
+        self.in_motion[drone] = drone.flying_to.name
         drone.step += 1
         self.link_usage[drone.flying_link] -= 1
         drone.target = 1.0
@@ -159,16 +161,19 @@ class Simulation:
         """
         if len(drone.path) < 2:
             return True
-        next = drone.path[1]
-        if next.nb_drones >= next.meta_data.max_drones:
+        next_h = drone.path[1]
+        if next_h.nb_drones >= next_h.meta_data.max_drones:
             return True
-        key = self.link_key(drone.path[0].name, next.name)
+        curr_h = drone.path[0]
+        key = self.link_key(
+            (curr_h.name, self.hubs[curr_h.name]),
+            (next_h.name, self.hubs[next_h.name]))
         return self.link_usage.get(key, 0) >= self.link_cap.get(key, 1)
 
     def output(self) -> None:
         """Print the hub each moving drone is heading for this turn."""
-        for d, h in self.in_motion.items():
-            print(f'D{d.id}-{h.name} ', end='')
+        for d, positon in self.in_motion.items():
+            print(f'D{d.id}-{positon} ', end='')
         print()
 
     def update_drone(self) -> None:
@@ -194,7 +199,9 @@ class Simulation:
                 continue
             next_h = drone.path[1]
             if not is_blocked:
-                key = self.link_key(curr.name, next_h.name)
+                key = self.link_key(
+                    (curr.name, self.hubs[curr.name]),
+                    (next_h.name, self.hubs[next_h.name]))
                 self.link_usage[key] = self.link_usage.get(key, 0)
                 drone.flying_link = key
                 curr.nb_drones -= 1
@@ -204,6 +211,7 @@ class Simulation:
                 drone.progress = 0
                 drone.flying_to = next_h
                 if next_h.meta_data.zone == Type.restricted:
+                    position = '-'.join(drone.flying_link)
                     drone.target = 0.5
                     drone.turn = 2
                 else:
@@ -217,7 +225,8 @@ class Simulation:
                         drone.end = True
                     drone.target = 1.0
                     drone.turn = 1
-                self.in_motion[drone] = next_h
+                    position = next_h.name
+                self.in_motion[drone] = position
                 drone.step += 1
                 self.drones_moved += 1
         self.output()
