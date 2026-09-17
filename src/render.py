@@ -156,7 +156,8 @@ class Layout():
         self._h: int = self._screen.get_size()[1]
         self._drones: list[Drone] = []
         self.blip: Sound = pygame.mixer.Sound('src/sounds/beep.mp3')
-        self.end_of_sim: Sound = pygame.mixer.Sound('src/sounds/delivered.mp3')
+        self.end_of_sim: Sound = pygame.mixer.Sound(
+            'src/sounds/delivered.mp3')
         self.end_of_sim.set_volume(0.1)
         self.blip.set_volume(0.2)
         self._bg: Surface = load('src/images/water.png')
@@ -167,7 +168,8 @@ class Layout():
         self.help: Surface = load('src/images/help.png')
         self.help_size: Rect = self.help_rect()
         self._help_center: tuple[int, int] = (self._w // 38, self._w // 38)
-        self.scale_help: Surface = scale(self.help, (self.help_size.w, self.help_size.h))
+        self.scale_help: Surface = scale(
+            self.help, (self.help_size.w, self.help_size.h))
         self.title_scale: Surface = scale(
             self._title, (self._w // 4.14, self._h // 13.09))
         self.background: Surface = (scale(
@@ -208,8 +210,9 @@ class Layout():
         side_e = self._w // 8.5
         available_x = self._w - 2 * side_e
         available_y = self._h - high_e - low_e
-        self._dist_x = min(available_x / span_x, 250)
-        self._dist_y = min(available_y / span_y, 250)
+        ceiling = min(self._w, self._h) // 3
+        self._dist_x = min(available_x / span_x, ceiling)
+        self._dist_y = min(available_y / span_y, ceiling)
         self._off_x = side_e + (available_x - span_x * self._dist_x) / 2
         self._off_y = high_e + (available_y - r_span_y * self._dist_y) / 2
         self.cp_hub, self.cp_details = self.scale_hub()
@@ -242,7 +245,9 @@ class Layout():
         hub = self._hub
         details = self._hub_d
         size = int(min(self._dist_x, self._dist_y) * 0.6)
-        size = max(20, min(80, size))
+        min_bound = self._h // 36
+        max_bound = self._h // 9
+        size = max(min_bound, min(max_bound, size))
         hub = smoothscale(hub, (size, size))
         details = scale(details, (size, size))
         return ((hub, details))
@@ -421,7 +426,7 @@ def rendering(data: Data, filepath: str) -> None:
     set_caption("Fly-in")
     icon = load('src/images/icon.png')
     set_icon(icon)
-    set_mode((1280, 720), pygame.RESIZABLE)
+    set_mode((1920, 1080), pygame.RESIZABLE)
     font = Font('src/images/determination.ttf', 15)
     current_map: Data = data
     map_path: Path = Path(filepath)
@@ -468,8 +473,8 @@ def rendering(data: Data, filepath: str) -> None:
                         set_mode(
                             (info.current_w, info.current_h), pygame.FULLSCREEN)
                 elif event.key == pygame.K_SPACE:
-                    sim.update_drone()
                     if not all([x.end for x in sim.drones]):
+                        sim.update_drone()
                         draw.increase_turn()
                 elif event.key == pygame.K_p:
                     auto = not auto
@@ -525,7 +530,7 @@ def rendering(data: Data, filepath: str) -> None:
             if not all(d.end for d in sim.drones):
                 sim.update_drone()
                 draw.increase_turn()
-                next_turn_at = pygame.time.get_ticks() + 400
+                next_turn_at = pygame.time.get_ticks() + 500
         if all(d.end for d in sim.drones):
             if not delivered:
                 if menu._music:

@@ -45,7 +45,7 @@ class Drone:
         self.flying_link: tuple[str, str] = ('', '')
         self.step: int = 0
 
-    def animate(self, dt: float, duree: float = 0.3) -> None:
+    def animate(self, dt: float, duree: float = 0.4) -> None:
         """Advance the visual interpolation between two hubs.
 
         Called once per frame, independently of the turn-based logic.
@@ -63,6 +63,7 @@ class Drone:
         self.x = a.x + (b.x - a.x) * self.progress
         self.y = a.y + (b.y - a.y) * self.progress
 
+
 class NoPathFound(Exception):
     """Raised when the map offers no route from start to goal.
 
@@ -71,6 +72,7 @@ class NoPathFound(Exception):
     """
     def __init__(self, msg: str = "No path was found") -> None:
         super().__init__('Error: ' + msg)
+
 
 class Simulation:
     """Runs the drone traffic, one turn at a time.
