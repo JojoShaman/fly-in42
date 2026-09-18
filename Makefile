@@ -1,7 +1,16 @@
+MAPS_URL = https://cdn.intra.42.fr/document/document/55008/maps.tar.gz
+
+maps:
+	@if [ ! -d maps ]; then \
+		curl -sSL -o maps.tar.gz $(MAPS_URL) && \
+		tar xzf maps.tar.gz && \
+		rm -rf maps.tar.gz; \
+	fi
+
 install:
 	poetry install
 
-run:
+run: maps
 	python3 src/main.py
 
 debug:
@@ -10,6 +19,7 @@ debug:
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type d -name .mypy_cache -exec rm -rf {} +
+	find . -type d -name "maps" -exec rm -rf {} +
 	find . -name ".DS_Store" -delete
 
 lint:

@@ -31,7 +31,7 @@ class Metadata(BaseModel):
 
     zone: Type = Field(default=Type.normal)
     color: str = Field(default="none")
-    max_drones: int = Field(default=1)
+    max_drones: int = Field(default=1, ge=1)
 
 
 class ConnectionMetadata(BaseModel):
@@ -41,7 +41,7 @@ class ConnectionMetadata(BaseModel):
         max_link_capacity: Number of drones allowed on the connection at the same time.
     """
 
-    max_link_capacity: int = Field(default=1)
+    max_link_capacity: int = Field(default=1, ge=1)
 
 
 class Hub(BaseModel):

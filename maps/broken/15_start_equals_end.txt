@@ -1,4 +1,0 @@
-nb_drones: 3
-start_hub: only 0 0 [color=green]
-end_hub: only 0 0 [color=green]
-connection: only-only
