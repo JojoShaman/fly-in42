@@ -188,30 +188,6 @@ class ParsingTools:
         return Connection(name1=name1, name2=name2, meta_data=meta_data)  # type: ignore
 
 
-def _read_lines(file: str) -> list[tuple[str, int]]:
-    with open(file, "r") as f:
-        content = f.read()
-    lines = [line for line in content.splitlines()
-             if line.strip() and not line.startswith('#')]
-    return [
-        (line, n)
-        for n, line in enumerate(lines, start=1)
-    ]
-
-
-def check(file: str) -> tuple[bool, bool]:
-    with open(file, "r") as f:
-        content = f.read()
-    comments: bool = False
-    empty_lines: bool = False
-    for line in content.splitlines():
-        if not line.strip():
-            empty_lines = True
-        elif line.startswith("#"):
-            comments = True
-    return (comments, empty_lines)
-
-
 class ErrorManagement:
     def __init__(self) -> None:
         self.errors: list[tuple[str, int]] = []
@@ -324,7 +300,7 @@ class Parsing:
                 self._report(self.handle, self.file)
                 raise ValueError
         else:
-            comments, empty = check(self.file)
+            comments, empty = self._file_checker(self.file)
             if comments or empty:
                 status: str = ""
                 if comments and empty:
@@ -389,7 +365,7 @@ class Parsing:
 
     def parse(self, file: str) -> Data:
         self.file = file
-        self._lines = _read_lines(file)
+        self._lines = self._read_lines(file)
         try:        
             self.structure_validator()
             self.syntax_validator()
@@ -407,6 +383,28 @@ class Parsing:
             connection=self.connections,
             total_hubs=self.total_hubs,
         )
+
+    def _read_lines(seld, file: str) -> list[tuple[str, int]]:
+        with open(file, "r") as f:
+            content = f.read()
+        lines = [line for line in content.splitlines()
+                if line.strip() and not line.startswith('#')]
+        return [
+            (line, n)
+            for n, line in enumerate(lines, start=1)
+        ]
+
+    def _file_checker(self, file: str) -> tuple[bool, bool]:
+        with open(file, "r") as f:
+            content = f.read()
+        comments: bool = False
+        empty_lines: bool = False
+        for line in content.splitlines():
+            if not line.strip():
+                empty_lines = True
+            elif line.startswith("#"):
+                comments = True
+        return (comments, empty_lines)
 
     @staticmethod
     def _report(handle: ErrorManagement, file: str) -> None:

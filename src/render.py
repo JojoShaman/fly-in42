@@ -26,11 +26,15 @@ class Menu:
         self._files: list[Path] = sorted(Path('maps').rglob('*.txt'))
         self._music: bool = False
         self._last_folder: str = ''
-        self._menu_sfx: Sound = pygame.mixer.Sound('src/sounds/beep.mp3')
+        self._menu_sfx: Sound = pygame.mixer.Sound(
+            'src/sounds/beep.mp3')
         self._menu_sfx.set_volume(0.2)
-        self._select_sfx: Sound = pygame.mixer.Sound('src/sounds/select.wav')
+        self._select_sfx: Sound = pygame.mixer.Sound(
+            'src/sounds/select.wav')
         self._select_sfx.set_volume(0.3)
-        self._challenge: Sound = pygame.mixer.Sound('src/sounds/soundtrack.mp3')
+        self._challenge: Sound = pygame.mixer.Sound(
+            'src/sounds/soundtrack.mp3')
+        self._loaded_map: Path = Path()
         self._index: int = 0
         self._visible: bool = False
         self._w: int = self._screen.get_width() // 4
@@ -72,7 +76,11 @@ class Menu:
                 self._index = 0
             else:
                 self._visible = False
-        elif not self._visible:
+                if not self.challenger_playing:
+                    self.play_music(False)
+                else:
+                    self._challenge.set_volume(0.3)
+        if not self._visible:
             return None
         elif event.key == pygame.K_DOWN:
             self._index = (self._index + 1) % len(self._entries())
@@ -92,7 +100,10 @@ class Menu:
                 self._folder = None
                 index = self._index
                 self._index = 0
-                return self._tree[folder][index]
+                self._loaded_map = self._tree[folder][index]
+                if not self.challenger_playing:
+                    self.play_music(False)
+                return self._loaded_map
         if not self._folder:
             if self._index == 0:
                 self._challenge.set_volume(0.3)
@@ -100,12 +111,19 @@ class Menu:
                     self.play_music(True)
             else:
                 if self._music:
-                    if not self._last_folder == 'challenger':
+                    if not self.challenger_playing:
                         self.play_music(False)
                     self._challenge.set_volume(0.17)
         elif self._folder and not self._folder == 'challenger':
-            self.play_music(False)
+            if not self.challenger_playing:
+                self.play_music(False)
         return None
+
+    @property
+    def challenger_playing(self) -> bool:
+        return (
+            str(self._loaded_map) ==
+            'maps/challenger/01_the_impossible_dream.txt')
 
     def play_music(self, toggle: bool) -> None:
         if toggle:
@@ -195,7 +213,8 @@ class Layout():
     def help_collide(self, increase: bool) -> None:
         size = self._w // 35 if increase else self._w // 38
         self.scale_help = scale(self.help, (size, size))
-        self.help_size = self.scale_help.get_rect(center=self.help_rect().center)
+        self.help_size = self.scale_help.get_rect(
+            center=self.help_rect().center)
 
     def load_map(self, data: Data) -> None:
         self.data = data
@@ -466,12 +485,14 @@ def rendering(data: Data, filepath: str) -> None:
                     set_mode((w, h), pygame.RESIZABLE)
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_f:
-                    if pygame.display.get_surface().get_flags() & pygame.FULLSCREEN:
+                    if (pygame.display.get_surface().get_flags() &
+                        pygame.FULLSCREEN):
                         set_mode((1280, 720), pygame.RESIZABLE)
                     else:
                         info = Info()
                         set_mode(
-                            (info.current_w, info.current_h), pygame.FULLSCREEN)
+                            (info.current_w, info.current_h),
+                            pygame.FULLSCREEN)
                 elif event.key == pygame.K_SPACE:
                     if not all([x.end for x in sim.drones]):
                         sim.update_drone()
