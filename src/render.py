@@ -254,10 +254,10 @@ class Layout():
             'src/sounds/delivered.mp3')
         self.end_of_sim.set_volume(0.1)
         self.blip.set_volume(0.2)
-        self._bg: Surface = load('src/images/water.png')
+        self._bg: Surface = load('src/images/background.png')
         self._title: Surface = load('src/images/fly-in.png')
-        self._hub: Surface = load('src/images/hub4.png')
-        self._hub_d: Surface = load('src/images/detail_hub.png')
+        self._hub: Surface = load('src/images/hub5.png')
+        self._hub_d: Surface = load('src/images/detail_hub2.png')
         self._drone_img: Surface = load('src/images/drone.png')
         self.help: Surface = load('src/images/help.png')
         self.help_size: Rect = self.help_rect()
@@ -304,6 +304,7 @@ class Layout():
         self.help_size = self.scale_help.get_rect(
             center=self.help_rect().center)
 
+
     def load_map(self, data: Data) -> None:
         """Compute the screen layout for a new map.
 
@@ -333,12 +334,15 @@ class Layout():
         self._off_y = high_e + (available_y - r_span_y * self._dist_y) / 2
         self.cp_hub, self.cp_details = self.scale_hub()
         self.lines: list[tuple[tuple[int, int], tuple[int, int]]] = []
+        self.lines_name: list[tuple[str, str]] = []
         lookup = {h.name: h for h in data.total_hubs}
         for c in data.connection:
             h1, h2 = lookup.get(c.name1), lookup.get(c.name2)
             if h1 and h2:
                 self.lines.append((self.world_to_screen(h1.x, h1.y),
                                    self.world_to_screen(h2.x, h2.y)))
+                self.lines_name.append((c.name1, c.name2))
+            
         self.hub_cache: dict[str, pygame.Surface] = {}
 
     def resize(self, w: int, h: int) -> None:
@@ -372,7 +376,7 @@ class Layout():
         return (int((x - self._min_x) * self._dist_x + self._off_x),
                 int(((y * -1) - self._min_y) * self._dist_y + self._off_y))
 
-    def scale_hub(self) -> tuple[pygame.Surface, pygame.Surface]:
+    def scale_hub(self) -> tuple[Surface, Surface]:
         """Scale the hub base and detail images for the current map.
 
         The size is derived from how closely packed hubs are, so
@@ -416,6 +420,7 @@ class Draw:
         self._layout: Layout = layout
         self._font: Font = Font('src/images/determination.ttf', 15)
         self._panel_font: Font = Font('src/images/determination.ttf', 10)
+        self._info_font: Font = Font('src/images/MADEOkine.otf', 10)
         self._map_txt: str = ""
         self._turn: int = 0
         self._avg_turn: float = 0
@@ -439,9 +444,20 @@ class Draw:
 
     def connections(self) -> None:
         """Draw every connection as a two-tone line."""
-        for a, b in self._layout.lines:
-            pygame.draw.line(self._screen, 'black', a, b, 5)
-            pygame.draw.line(self._screen, 'white', a, b, 1)
+        start = (255, 255, 255)
+        end = (255, 30, 60)
+        for (pos_a, pos_b), (name1, name2) in zip(
+            self._layout.lines, self._layout.lines_name):
+            key = self._sim.link_key((name1, self._sim.hubs[name1]), (name2, self._sim.hubs[name2]))
+            cap = self._sim.link_cap.get(key, 1)
+            usage = self._sim.link_usage.get(key, 0)
+            ratio = min(1.0, usage / cap)
+            r = int(start[0] + (end[0] - start[0]) * ratio)
+            g = int(start[1] + (end[1] - start[1]) * ratio)
+            b = int(start[2] + (end[2] - start[2]) * ratio)
+            pygame.draw.line(self._screen, 'black', pos_a, pos_b, 5)
+            pygame.draw.line(self._screen, (r, g, b), pos_a, pos_b, 2)
+
 
     def tinted(self, color: str) -> Surface:
         """Get a hub image tinted to the given color, from cache if possible.
@@ -455,8 +471,8 @@ class Draw:
         if color == 'rainbow':
             return self._rainbow()
         if color not in self._layout.hub_cache:
-            rgb = pygame.Color(color)
-            rgb = pygame.Color(
+            rgb = Color(color)
+            rgb = Color(
                 max(rgb.r, 35), max(rgb.g, 35), max(rgb.b, 35))
             img = self._layout.cp_hub.copy()
             img.fill(rgb, special_flags=pygame.BLEND_RGBA_MULT)
@@ -490,6 +506,10 @@ class Draw:
         pos = self._layout.world_to_screen(hub_data.x, hub_data.y)
         self._screen.blit(img, img.get_rect(center=pos))
 
+    def hub_pos(self, hub_data: Hub) -> Rect:
+        ret = self._layout.world_to_screen(hub_data.x, hub_data.y)
+        return Rect(self._layout.cp_hub.get_rect(center=ret))
+
     def hub(self) -> None:
         """Draw every hub on the map, including start and end."""
         for i in range(len(self._layout.data.hub)):
@@ -512,10 +532,12 @@ class Draw:
 
     def resize_font(self) -> None:
         """Recreate the fonts used for on-screen text and the help panel."""
-        size = max(5, self._screen.get_height() // 36)
+        size = max(5, self._screen.get_height() // 46)
         p_size = max(5, self._screen.get_height() // 45)
+        i_size = max(5, self._screen.get_height() // 40)
         self._font = Font('src/images/determination.ttf', size)
         self._panel_font = Font('src/images/determination.ttf', p_size)
+        self._info_font = Font('src/images/MADEOkine.otf', i_size)
 
     def set_map_name(self, filepath: Path) -> None:
         """Set the map name shown on screen.
@@ -529,7 +551,7 @@ class Draw:
         """Draw the current map's name in the bottom-left corner."""
         w, h = self._screen.get_width(), self._screen.get_height()
         surf = self._font.render(self._map_txt, False, 'white')
-        self._screen.blit(surf, (w // 50, h - (h // 20)))
+        self._screen.blit(surf, surf.get_rect(bottomleft=(w // 50, h - (h // 55))))
 
     def reset_turn(self) -> None:
         """Reset the displayed turn counter to zero."""
@@ -605,6 +627,23 @@ class Draw:
         r = self._layout.help_rect()
         self._screen.blit(panel, (r.left, r.bottom + 10))
 
+    def display_hub_info(self) -> None:
+        from data import Type
+        zone_type: dict[Type, str] = {
+            Type.normal: 'normal',
+            Type.restricted: 'restricted',
+            Type.priority: 'priority',
+            Type.blocked: 'blocked'
+        }
+        for hub in self._layout.data.total_hubs:
+            if not self.hub_pos(hub).collidepoint(pygame.mouse.get_pos()):
+                continue
+            line: str = f"{hub.name}    {hub.x}, {hub.y}    zone={zone_type[hub.meta_data.zone]}    max_drones={hub.meta_data.max_drones}"
+            w, h = self._screen.get_width(), self._screen.get_height()
+            info_panel = self._info_font.render(line, False, 'white')
+            self._screen.blit(info_panel, info_panel.get_rect(midbottom=(w // 2, h - h // 55)))
+            break
+
 
 def _draw(draw: Draw, dt: float) -> None:
     """Render one full frame: background, map, drones and on-screen text.
@@ -624,6 +663,7 @@ def _draw(draw: Draw, dt: float) -> None:
     draw.avg_turn()
     draw.d_per_turn()
     draw.help_panel()
+    draw.display_hub_info()
 
 
 def rendering(data: Data, filepath: str) -> None:
