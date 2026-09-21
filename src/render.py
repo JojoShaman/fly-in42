@@ -21,6 +21,26 @@ from simulation import Drone, Simulation
 
 
 class Menu:
+    """In-game overlay for picking a map file to load.
+
+    Shown as a panel in the bottom-right corner. Navigates a two-level
+    tree (difficulty folder, then map file) and plays background music
+    tied to whichever map is currently loaded — the challenger map gets
+    its own soundtrack that keeps playing across menu navigation.
+
+    Args:
+        font: Font used to render the panel's entries.
+
+    Attributes:
+        _files: All map files found under maps/, sorted.
+        _music: Whether the challenger soundtrack is currently playing.
+        _last_folder: Folder the last loaded map came from.
+        _loaded_map: Path of the map currently loaded in the simulation.
+        _index: Cursor position within the current list of entries.
+        _visible: Whether the panel is shown.
+        _tree: Map files grouped by their parent folder name.
+        _folder: Folder currently open, or None when at the root.
+    """
     def __init__(self, font: Font) -> None:
         self._font: Font = font
         self._files: list[Path] = sorted(Path('maps').rglob('*.txt'))
@@ -52,6 +72,12 @@ class Menu:
         return get_surface()
 
     def _resize(self, w: int, h: int) -> None:
+        """Recompute the panel's size, position and font for a new window.
+
+        Args:
+            w: New window width in pixels.
+            h: New window height in pixels.
+        """
         self._w, self._h = w // 4, h // 16
         margin = h // 36
         self._rect = Rect(w - self._w - margin, h - self._h - margin,
@@ -60,11 +86,31 @@ class Menu:
         self._font = Font('src/images/determination.ttf', size)
 
     def _entries(self) -> list[Path] | list[str]:
+        """List what should currently be shown in the panel.
+
+        Returns:
+            Folder names when at the root, or the map files inside the
+            currently open folder.
+        """
         if self._folder is None:
             return list(self._tree.keys())
         return self._tree[self._folder]
 
     def handle(self, event: Event) -> Path | None:
+        """React to one keyboard event and update the menu's state.
+
+        Escape opens the panel, backs out of a folder, or closes it.
+        Up/Down move the cursor. Enter opens a folder or picks a map.
+        Music is started, stopped or faded to match navigation and
+        whichever map ends up loaded.
+
+        Args:
+            event: The pygame event to process.
+
+        Returns:
+            The chosen map's path when the user picks one, otherwise
+            None.
+        """
         if event.type != pygame.KEYDOWN:
             return None
         if event.key == pygame.K_ESCAPE:
@@ -121,11 +167,17 @@ class Menu:
 
     @property
     def challenger_playing(self) -> bool:
+        """Whether the currently loaded map is the challenger map."""
         return (
             str(self._loaded_map) ==
             'maps/challenger/01_the_impossible_dream.txt')
 
     def play_music(self, toggle: bool) -> None:
+        """Start or stop the challenger soundtrack.
+
+        Args:
+            toggle: True to start looping the track, False to stop it.
+        """
         if toggle:
             self._challenge.play(-1)
             self._music = True
@@ -134,6 +186,7 @@ class Menu:
             self._music = False
 
     def draw(self) -> None:
+        """Render the panel, if visible, over the current screen."""
         if not self._visible:
             return
         panel: Surface = Surface((self._w, self._h), pygame.SRCALPHA)
@@ -169,6 +222,29 @@ class Menu:
 
 
 class Layout():
+    """Computes where hubs and drones sit on screen for a given map.
+
+    Converts a map's world coordinates into screen pixels, keeping the
+    layout centered and appropriately scaled regardless of window size.
+    Owns the source images used for rendering and the caches derived
+    from them (hub tinting, connection line endpoints).
+
+    Args:
+        data: Parsed map to lay out.
+
+    Attributes:
+        data: The map currently laid out.
+        background: Background image scaled to the window.
+        title_scale: Title image scaled to the window.
+        drone_surf: Drone image scaled to the window.
+        help: Help icon image.
+        scale_help: Help icon scaled to its current display size.
+        help_size: Rect the help icon is currently drawn at.
+        cp_hub: Hub base image scaled for the current map.
+        cp_details: Hub detail overlay scaled for the current map.
+        hub_cache: Tinted hub images, keyed by color.
+        lines: Screen-space endpoints of each connection.
+    """
     def __init__(self, data: Data) -> None:
         self._w: int = self._screen.get_size()[0]
         self._h: int = self._screen.get_size()[1]
@@ -207,16 +283,37 @@ class Layout():
         return get_surface()
 
     def help_rect(self) -> Rect:
+        """Return the help icon's resting position and size.
+
+        Returns:
+            A Rect anchored near the top-left corner, sized relative
+            to the window width.
+        """
         size = self._w // 38
         return Rect(size // 2, size // 2, size, size)
 
     def help_collide(self, increase: bool) -> None:
+        """Grow or shrink the help icon around its fixed center.
+
+        Args:
+            increase: True to enlarge the icon (hovered), False to
+                return it to its resting size.
+        """
         size = self._w // 35 if increase else self._w // 38
         self.scale_help = scale(self.help, (size, size))
         self.help_size = self.scale_help.get_rect(
             center=self.help_rect().center)
 
     def load_map(self, data: Data) -> None:
+        """Compute the screen layout for a new map.
+
+        Works out the scale and offset needed to fit every hub on
+        screen with even margins, then pre-scales the hub images and
+        precomputes each connection's screen-space endpoints.
+
+        Args:
+            data: The parsed map to lay out.
+        """
         self.data = data
         xs = [h.x for h in data.total_hubs]
         ys = [(h.y * -1) for h in data.total_hubs]
@@ -245,6 +342,12 @@ class Layout():
         self.hub_cache: dict[str, pygame.Surface] = {}
 
     def resize(self, w: int, h: int) -> None:
+        """Re-scale everything for a new window size.
+
+        Args:
+            w: New window width in pixels.
+            h: New window height in pixels.
+        """
         self._w, self._h = w, h
         self.background = scale(
             self._bg, (w, h))
@@ -257,10 +360,28 @@ class Layout():
         self.load_map(self.data)
 
     def world_to_screen(self, x: float, y: float) -> tuple[int, int]:
+        """Convert map coordinates to screen pixels.
+
+        Args:
+            x: Horizontal position in map coordinates.
+            y: Vertical position in map coordinates.
+
+        Returns:
+            The corresponding (x, y) pixel position on screen.
+        """
         return (int((x - self._min_x) * self._dist_x + self._off_x),
                 int(((y * -1) - self._min_y) * self._dist_y + self._off_y))
 
     def scale_hub(self) -> tuple[pygame.Surface, pygame.Surface]:
+        """Scale the hub base and detail images for the current map.
+
+        The size is derived from how closely packed hubs are, so
+        crowded maps get smaller hubs and sparse ones get larger ones,
+        within fixed bounds.
+
+        Returns:
+            The scaled base image and the scaled detail overlay.
+        """
         hub = self._hub
         details = self._hub_d
         size = int(min(self._dist_x, self._dist_y) * 0.6)
@@ -273,6 +394,22 @@ class Layout():
 
 
 class Draw:
+    """Renders one frame of the simulation to the screen.
+
+    Reads positions and state from a Layout and a Simulation but owns
+    no game state itself beyond what's needed for display (fonts,
+    on-screen text, hover state for the help icon).
+
+    Args:
+        layout: Layout providing screen positions and images.
+        simulation: Simulation providing drone and turn state.
+
+    Attributes:
+        _map_txt: Currently displayed map name.
+        _turn: Current turn count shown on screen.
+        _avg_turn: Current average-turns-per-drone shown on screen.
+        _on_icon: Whether the cursor is currently over the help icon.
+    """
     from data import Hub
 
     def __init__(self, layout: Layout, simulation: Simulation) -> None:
@@ -290,20 +427,31 @@ class Draw:
         return get_surface()
 
     def background(self) -> None:
+        """Draw the background image."""
         self._screen.blit(self._layout.background, (0, 0))
 
     def title(self) -> None:
+        """Draw the title image, centered near the top of the window."""
         w, h = self._screen.get_width(), self._screen.get_height()
         rect: Rect = self._layout.title_scale.get_rect(
             center=(w // 2, h // 14))
         self._screen.blit(self._layout.title_scale, rect)
 
     def connections(self) -> None:
+        """Draw every connection as a two-tone line."""
         for a, b in self._layout.lines:
             pygame.draw.line(self._screen, 'black', a, b, 5)
             pygame.draw.line(self._screen, 'white', a, b, 1)
 
     def tinted(self, color: str) -> Surface:
+        """Get a hub image tinted to the given color, from cache if possible.
+
+        Args:
+            color: Color name, or 'rainbow' for the animated effect.
+
+        Returns:
+            The tinted hub image, with its detail overlay applied.
+        """
         if color == 'rainbow':
             return self._rainbow()
         if color not in self._layout.hub_cache:
@@ -317,6 +465,11 @@ class Draw:
         return (self._layout.hub_cache[color])
 
     def _rainbow(self) -> Surface:
+        """Build a hub image tinted with the current rainbow color.
+
+        Returns:
+            The tinted hub image for this frame.
+        """
         tint = (get_ticks() / 700) % 1.0
         r, g, b = colorsys.hsv_to_rgb(tint, 0.95, 1.0)
         img = self._layout.cp_hub.copy()
@@ -327,18 +480,29 @@ class Draw:
         return img
 
     def _draw_hub(self, hub_data: Hub) -> None:
+        """Draw a single hub at its screen position.
+
+        Args:
+            hub_data: The hub to draw.
+        """
         color = hub_data.meta_data.color or 'grey'
         img = self.tinted(color)
         pos = self._layout.world_to_screen(hub_data.x, hub_data.y)
         self._screen.blit(img, img.get_rect(center=pos))
 
     def hub(self) -> None:
+        """Draw every hub on the map, including start and end."""
         for i in range(len(self._layout.data.hub)):
             self._draw_hub(self._layout.data.hub[i])
         self._draw_hub(self._layout.data.start_hub)
         self._draw_hub(self._layout.data.end_hub)
 
     def display_drone(self, dt: float) -> None:
+        """Advance and draw every drone for this frame.
+
+        Args:
+            dt: Seconds elapsed since the previous frame.
+        """
         drones: list[Drone] = self._sim.drones
         for d in drones:
             d.animate(dt)
@@ -347,32 +511,43 @@ class Draw:
             self._screen.blit(self._layout.drone_surf, rect)
 
     def resize_font(self) -> None:
+        """Recreate the fonts used for on-screen text and the help panel."""
         size = max(5, self._screen.get_height() // 36)
         p_size = max(5, self._screen.get_height() // 45)
         self._font = Font('src/images/determination.ttf', size)
         self._panel_font = Font('src/images/determination.ttf', p_size)
 
     def set_map_name(self, filepath: Path) -> None:
+        """Set the map name shown on screen.
+
+        Args:
+            filepath: Path of the currently loaded map.
+        """
         self._map_txt = filepath.parent.name + '/ ' + filepath.stem
 
     def map_name(self) -> None:
+        """Draw the current map's name in the bottom-left corner."""
         w, h = self._screen.get_width(), self._screen.get_height()
         surf = self._font.render(self._map_txt, False, 'white')
         self._screen.blit(surf, (w // 50, h - (h // 20)))
 
     def reset_turn(self) -> None:
+        """Reset the displayed turn counter to zero."""
         self._turn = 0
 
     def increase_turn(self) -> None:
+        """Advance the displayed turn counter by one."""
         self._turn += 1
 
     def turn(self) -> None:
+        """Draw the current turn count in the top-right corner."""
         w, h = self._screen.get_width(), self._screen.get_height()
         surf = self._font.render(f'turns: {self._turn}', False, 'white')
         rect = surf.get_rect(topright=(w - w // 25, h // 20))
         self._screen.blit(surf, rect)
 
     def avg_turn(self) -> None:
+        """Compute and draw the current average turns per drone."""
         self._avg_turn = round(sum(turn.step for turn in self._sim.drones)
                                / self._layout.data.nb_drones, 1)
         w, h = self._screen.get_width(), self._screen.get_height()
@@ -382,6 +557,7 @@ class Draw:
         self._screen.blit(surf, rect)
 
     def d_per_turn(self) -> None:
+        """Draw how many drones moved during the last turn."""
         w, h = self._screen.get_width(), self._screen.get_height()
         surf = self._font.render(
             f'drones moved: {self._sim.drones_moved}', False, 'white')
@@ -389,9 +565,15 @@ class Draw:
         self._screen.blit(surf, rect)
 
     def help(self) -> None:
+        """Draw the help icon at its current size and position."""
         self._screen.blit(self._layout.scale_help, self._layout.help_size)
 
     def help_panel(self) -> None:
+        """Show the keyboard shortcuts panel while hovering the help icon.
+
+        Grows the help icon and plays a sound the moment the cursor
+        enters it, and shrinks it back once the cursor leaves.
+        """
         if not self._layout.help_rect().collidepoint(pygame.mouse.get_pos()):
             if self._on_icon:
                 self._on_icon = False
@@ -425,6 +607,12 @@ class Draw:
 
 
 def _draw(draw: Draw, dt: float) -> None:
+    """Render one full frame: background, map, drones and on-screen text.
+
+    Args:
+        draw: The Draw instance to render with.
+        dt: Seconds elapsed since the previous frame.
+    """
     draw.background()
     draw.help()
     draw.title()
@@ -439,6 +627,17 @@ def _draw(draw: Draw, dt: float) -> None:
 
 
 def rendering(data: Data, filepath: str) -> None:
+    """Open the window and run the simulation's main loop.
+
+    Handles fullscreen and window resizing, the map-selection menu,
+    manual and automatic turn advancement, restarting the current map,
+    and switching to a newly chosen one.
+
+    Args:
+        data: Initial parsed map to display.
+        filepath: Path of that initial map, used for its display name
+            and for restarting.
+    """
     from simulation import NoPathFound
     pygame.init()
     pygame.mixer.init()

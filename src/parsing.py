@@ -35,21 +35,34 @@ RESET = "\033[0m"
 
 
 class ConnectionError(Exception):
+    """Raised when a connection line is malformed or refers to unknown hubs."""
     def __init__(self, msg: str) -> None:
         super().__init__(msg)
 
 
 class MetadataError(Exception):
+    """Raised when a metadata block (hub or connection) is malformed."""
     def __init__(self, msg: str) -> None:
         super().__init__(msg)
 
 
 class HubError(Exception):
+    """Raised when a hub line is missing required fields."""
     def __init__(self, msg: str) -> None:
         super().__init__(msg)
 
 
 class ParsingTools:
+    """Stateless-per-map helpers for turning map lines into typed objects.
+
+    Attributes:
+        connection_line: Line numbers where each connection was declared,
+            keyed by its normalized 'a-b' name.
+        hub_errors: Count of hub/metadata errors seen so far, used to
+            skip parsing connections once hubs are known to be broken.
+        max_drones: Total drone count from the map, used as the default
+            capacity for start/end hubs.
+    """
     def __init__(self) -> None:
         self.connection_line: dict[str, list[int]] = {}
         self.hub_errors: int = 0
@@ -59,6 +72,27 @@ class ParsingTools:
     def _parse_metadata(self, raw: str | None,
                         keywords: list[str],
                         data_type: str) -> Metadata | ConnectionMetadata:
+        """Parse a '[key=value ...]' metadata block.
+
+        Metadata tags may appear in any order. max_drones is ignored
+        on start_hub and end_hub, per the spec — present but unused.
+
+        Args:
+            raw: The metadata block's content, without brackets, or
+                None when the line had no metadata.
+            keywords: Valid keys for this kind of metadata.
+            data_type: What is being parsed: 'hub', 'start_hub',
+                'end_hub' or 'connection'. Only 'hub' uses '1' as the
+                default max_drones; start/end use the map's drone count
+                so their capacity is effectively unlimited.
+
+        Returns:
+            A Metadata for hubs, or a ConnectionMetadata for connections.
+
+        Raises:
+            MetadataError: If the block is malformed, uses an unknown
+                key, repeats a key, or gives an invalid zone.
+        """
         meta: dict[str, Any] = {}
         max_drone_default = '1' if data_type == 'hub' else str(self.max_drones)
         if raw is not None:
@@ -101,6 +135,17 @@ class ParsingTools:
             zone=zone, color=color, max_drones=max_drones)
 
     def _parse_drones(self, nb: str) -> int:
+        """Parse the drone count from the nb_drones line.
+
+        Args:
+            nb: The value after 'nb_drones:'.
+
+        Returns:
+            The parsed drone count.
+
+        Raises:
+            ValueError: If nb isn't an integer, or isn't positive.
+        """
         try:
             ret = int(nb)
         except ValueError as e:
@@ -111,6 +156,20 @@ class ParsingTools:
 
     def _extract_meta_block(
             self, tokens: list[str], start: int) -> str | None:
+        """Pull the '[...]' metadata block out of a line's tokens.
+
+        Args:
+            tokens: The line's whitespace-split tokens.
+            start: Index of the first token that could belong to the
+                metadata block.
+
+        Returns:
+            The block's content without brackets, or None if there's
+            nothing after `start`.
+
+        Raises:
+            MetadataError: If a bracket is missing or misplaced.
+        """
         rest = ' '.join(tokens[start:])
         if not rest:
             return None
@@ -122,6 +181,22 @@ class ParsingTools:
         return rest.strip('[]')
 
     def _parse_hub(self, body: str, hub_type: str) -> Hub:
+        """Parse a hub line into a Hub object.
+
+        Args:
+            body: The line's content after 'hub:', 'start_hub:' or
+                'end_hub:'.
+            hub_type: Which of the three this line declared, passed
+                through to metadata parsing.
+
+        Returns:
+            The parsed Hub.
+
+        Raises:
+            HubError: If the name, x or y field is missing.
+            MetadataError: If the metadata block is malformed.
+            ValidationError: If a field fails model validation.
+        """
         splited = body.split()
         if len(splited) < 3:
             raise HubError("hub definition requires a name, x and y")
@@ -142,12 +217,38 @@ class ParsingTools:
         )
 
     def get_link(self, a: str, b: str) -> tuple[str, str]:
+        """Order two hub names by their position in the file.
+
+        Args:
+            a: One hub name.
+            b: The other hub name.
+
+        Returns:
+            The two names ordered so the one declared first comes first.
+        """
         a_index = self._hubs_name.index(a)
         b_index = self._hubs_name.index(b)
         return ((a, b) if a_index < b_index else (b, a))
 
     def _parse_connection(
             self, line: str, hubs: list[Hub], nb_line: int) -> Connection:
+        """Parse a connection line into a Connection object.
+
+        Args:
+            line: The line's content after 'connection:'.
+            hubs: Hubs seen so far, used to check both ends exist.
+            nb_line: The line's number, recorded so a later duplicate
+                of this connection can point back to it.
+
+        Returns:
+            The parsed Connection.
+
+        Raises:
+            ConnectionError: If the line's syntax is wrong, either hub
+                is unknown, a hub is connected to itself, or this
+                connection was already declared.
+            MetadataError: If the metadata block is malformed.
+        """
         self._hubs_name = [h.name for h in hubs]
         tokens = line.split()
         meta_data: ConnectionMetadata = ConnectionMetadata()
@@ -193,12 +294,25 @@ class ParsingTools:
 
 
 class ErrorManagement:
+    """Collects and reports every structural error found in a map file.
+
+    Attributes:
+        errors: Each error's message and the line number it applies
+            to (0 when the error isn't tied to one line).
+        nb_errors: Total number of errors collected.
+    """
     def __init__(self) -> None:
         self.errors: list[tuple[str, int]] = []
         self.nb_errors: int = 0
 
     def _error_manager(
             self, seen: dict[str, list[tuple[int, str]]]) -> None:
+        """Run every structural check against the file's keyword lines.
+
+        Args:
+            seen: Each keyword mapped to the (line, body) pairs where
+                it appeared.
+        """
         lines: list[tuple[int, str]] = []
         for key, hubs in seen.items():
             for line, _ in hubs:
@@ -216,6 +330,12 @@ class ErrorManagement:
 
     def _duplicate_errors(
             self, seen: dict[str, list[tuple[int, str]]]) -> None:
+        """Flag hub names declared more than once.
+
+        Args:
+            seen: Each keyword mapped to the (line, body) pairs where
+                it appeared.
+        """
         hubs: dict[str, list[int]] = {}
         for key in ("start_hub", "hub", "end_hub"):
             for line, data in seen.get(key, []):
@@ -234,6 +354,12 @@ class ErrorManagement:
                 )
 
     def _missing_errors(self, seen: dict[str, list[tuple[int, str]]]) -> None:
+        """Flag required keywords that are missing or declared twice.
+
+        Args:
+            seen: Each keyword mapped to the (line, body) pairs where
+                it appeared.
+        """
         for key in ("nb_drones", "start_hub", "end_hub", "connection"):
             nb: int = 0
             if key not in seen:
@@ -255,6 +381,16 @@ class ErrorManagement:
 
 
 def find_similar(wrong_k: str, keywords: list[str]) -> str:
+    """Suggest the closest known keyword to a misspelled one.
+
+    Args:
+        wrong_k: The keyword the user actually wrote.
+        keywords: The valid keywords to compare against.
+
+    Returns:
+        The closest match, or an empty string if none is close enough
+        to be a useful suggestion.
+    """
     similar: str = ""
     last_inter: set[str] = set()
     for key in keywords:
@@ -269,6 +405,22 @@ def find_similar(wrong_k: str, keywords: list[str]) -> str:
 
 
 class Parsing:
+    """Parses a map file into a Data object, collecting every error found.
+
+    Runs a structural pass first (keyword order, presence, duplicates)
+    before attempting to build any hub or connection, so a badly
+    shaped file is reported as a whole rather than one line at a time.
+
+    Attributes:
+        file: Path of the file being parsed.
+        nb_drones: Parsed drone count.
+        start_hub: Parsed starting hub.
+        hub: Parsed intermediate hubs.
+        end_hub: Parsed goal hub.
+        connections: Parsed connections.
+        total_hubs: All hubs, including start and end, in file order.
+        handle: Collected errors for this parse.
+    """
     def __init__(self) -> None:
         self.file: str = ''
         self.nb_drones: int = 0
@@ -281,6 +433,17 @@ class Parsing:
         self._lines: list[tuple[str, int]] = []
 
     def structure_validator(self) -> None:
+        """Check the file's overall shape before parsing any content.
+
+        Verifies every line uses a known keyword, that nb_drones comes
+        first, and that no keyword required exactly once is missing or
+        repeated.
+
+        Raises:
+            ValueError: If the file is empty, contains only comments
+                and blank lines, or fails any structural check. The
+                errors are printed before raising.
+        """
         seen: dict[str, list[tuple[int, str]]] = {}
         if len(self._lines) > 0:
             for line, n in self._lines:
@@ -323,6 +486,11 @@ class Parsing:
             raise ValueError
 
     def syntax_validator(self) -> None:
+        """Parse every line's content now that its structure is known.
+
+        Errors are collected rather than raised immediately, so a file
+        with several unrelated problems is reported in one pass.
+        """
         tools = ParsingTools()
         for line, number in self._lines:
             key, body = line.split(':')
@@ -368,6 +536,19 @@ class Parsing:
                     (f"  {RED}➜{RESET} line {number}: {e}", number))
 
     def parse(self, file: str) -> Data:
+        """Parse a map file from disk into a Data object.
+
+        Args:
+            file: Path to the map file.
+
+        Returns:
+            The parsed map.
+
+        Raises:
+            ValueError: If the file fails structural or syntax
+                validation, or is missing a start or end hub. The
+                collected errors are printed before raising.
+        """
         self.file = file
         self._lines = self._read_lines(file)
         try:
@@ -388,7 +569,15 @@ class Parsing:
             total_hubs=self.total_hubs,
         )
 
-    def _read_lines(seld, file: str) -> list[tuple[str, int]]:
+    def _read_lines(self, file: str) -> list[tuple[str, int]]:
+        """Read a map file, stripping comments and blank lines.
+
+        Args:
+            file: Path to the map file.
+
+        Returns:
+            Each remaining line paired with its original line number.
+        """
         with open(file, "r") as f:
             content = f.read()
         lines = [line for line in content.splitlines()
@@ -399,6 +588,18 @@ class Parsing:
         ]
 
     def _file_checker(self, file: str) -> tuple[bool, bool]:
+        """Check whether a file's only content is comments or blank lines.
+
+        Used to give a clearer message than "empty" when a file has
+        content that all gets stripped away.
+
+        Args:
+            file: Path to the map file.
+
+        Returns:
+            Whether the file has any comment lines, and whether it has
+            any blank lines.
+        """
         with open(file, "r") as f:
             content = f.read()
         comments: bool = False
@@ -412,6 +613,12 @@ class Parsing:
 
     @staticmethod
     def _report(handle: ErrorManagement, file: str) -> None:
+        """Print every collected error, ordered by line number.
+
+        Args:
+            handle: The error collection to report.
+            file: Path of the file being parsed, shown in the summary.
+        """
         word = "errors" if handle.nb_errors > 1 else "error"
         handle.errors.sort(key=lambda e: e[1] if e[1] else float("inf"))
 

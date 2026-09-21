@@ -70,6 +70,7 @@ class Hub(BaseModel):
     @classmethod
     def name_validator(cls, name: str) -> str:
         """Reject name if dash is found.
+
         Returns:
             str: name if valid.
         """
