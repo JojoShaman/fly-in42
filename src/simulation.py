@@ -99,9 +99,12 @@ class Simulation:
     def __init__(self, data: Data) -> None:
         self._data = data
         self.link_usage: dict[tuple[str, str], int] = {}
-        self.hubs: dict[str, int] = {h.name : pos for pos, h in enumerate(data.total_hubs)}
+        self.hubs: dict[str, int] = {h.name: pos for pos, h
+                                     in enumerate(data.total_hubs)}
         self.link_cap: dict[tuple[str, str], int] = {
-            self.link_key((c.name1, self.hubs[c.name1]), (c.name2, self.hubs[c.name2])): c.meta_data.max_link_capacity
+            self.link_key(
+                (c.name1, self.hubs[c.name1]),
+                (c.name2, self.hubs[c.name2])): c.meta_data.max_link_capacity
             for c in data.connection}
         self._path_obj: Path = Path(data)
         self._path: list[Hub] = self._path_obj.find_path(data.start_hub.name)
@@ -114,7 +117,9 @@ class Simulation:
         self.in_motion: dict[Drone, str] = {}
         self.drones_moved: int = 0
 
-    def link_key(self, a: tuple[str, int], b: tuple[str, int]) -> tuple[str, str]:
+    def link_key(self,
+                 a: tuple[str, int],
+                 b: tuple[str, int]) -> tuple[str, str]:
         """Build the lookup key identifying a connection.
 
         Connections are bidirectional, so the two names are sorted to give

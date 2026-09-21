@@ -7,9 +7,10 @@ class Type(Enum):
 
     Attributes:
         normal: Standard zone with 1 turn movement cost (default)
-        blocked: Inaccessible zone. Drones must not enter or pass through this zone.
-            Any path using it is invalid.
-        restricted: A sensitive or dangerous zone. Movement to this zone costs 2 turns.
+        blocked: Inaccessible zone. Drones must not enter or
+             pass through this zone. Any path using it is invalid.
+        restricted: A sensitive or dangerous zone. Movement to
+             this zone costs 2 turns.
         priority: A preferred zone. Movement to this zone costs 1 turn
             but should be prioritized in pathfinding.
     """
@@ -38,7 +39,8 @@ class ConnectionMetadata(BaseModel):
     """Data structure comprising hub links.
 
     Attributes:
-        max_link_capacity: Number of drones allowed on the connection at the same time.
+        max_link_capacity: Number of drones allowed on the
+         connection at the same time.
     """
 
     max_link_capacity: int = Field(default=1, ge=1)
@@ -99,7 +101,8 @@ class Data(BaseModel):
         hub: list Containing all the intermediate hubs and their information.
         end_hub: End hub data.
         connection: List containing all connections and their information.
-        total_hubs: List containing all hubs including start and end, in file order.
+        total_hubs: List containing all hubs including start and end, in file
+         order.
     """
 
     nb_drones: int = Field(gt=0)

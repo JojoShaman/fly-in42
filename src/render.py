@@ -401,7 +401,7 @@ class Draw:
             self._on_icon = True
             self._layout.blip.play()
         self._layout.help_collide(True)
-        lines: list = [
+        lines: list[str] = [
             "SPACE      next turn",
             "P               auto play",
             "R               restart",
@@ -486,7 +486,7 @@ def rendering(data: Data, filepath: str) -> None:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_f:
                     if (pygame.display.get_surface().get_flags() &
-                        pygame.FULLSCREEN):
+                            pygame.FULLSCREEN):
                         set_mode((1280, 720), pygame.RESIZABLE)
                     else:
                         info = Info()

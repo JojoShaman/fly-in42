@@ -33,17 +33,21 @@ _ZONES = {
 RED = "\033[31m"
 RESET = "\033[0m"
 
+
 class ConnectionError(Exception):
     def __init__(self, msg: str) -> None:
         super().__init__(msg)
+
 
 class MetadataError(Exception):
     def __init__(self, msg: str) -> None:
         super().__init__(msg)
 
+
 class HubError(Exception):
     def __init__(self, msg: str) -> None:
         super().__init__(msg)
+
 
 class ParsingTools:
     def __init__(self) -> None:
@@ -53,18 +57,18 @@ class ParsingTools:
         self._hubs_name: list[str] = []
 
     def _parse_metadata(self, raw: str | None,
-                        keywords: list,
+                        keywords: list[str],
                         data_type: str) -> Metadata | ConnectionMetadata:
         meta: dict[str, Any] = {}
-        max_drone_default = '1'  if data_type == 'hub' else str(self.max_drones)
+        max_drone_default = '1' if data_type == 'hub' else str(self.max_drones)
         if raw is not None:
             for token in raw.split():
                 if token == '=':
                     raise MetadataError(
-                        "syntax error, spaces around '=' are not allowed") 
+                        "syntax error, spaces around '=' are not allowed")
                 key, sep, value = token.partition('=')
                 if not sep:
-                    raise MetadataError(f"'=' is missing in '{token}'")     
+                    raise MetadataError(f"'=' is missing in '{token}'")
                 if not key or not value:
                     raise MetadataError(
                         "syntax error, spaces around '=' are not allowed")
@@ -94,8 +98,7 @@ class ParsingTools:
         color = meta.get('color', 'none')
         max_drones = meta.get('max_drones', max_drone_default)
         return Metadata(
-            zone=zone, color=color, max_drones=max_drones)  # type: ignore
-
+            zone=zone, color=color, max_drones=max_drones)
 
     def _parse_drones(self, nb: str) -> int:
         try:
@@ -105,7 +108,6 @@ class ParsingTools:
         if ret <= 0:
             raise ValueError("'nb_drones' should be a positive integer.")
         return ret
-
 
     def _extract_meta_block(
             self, tokens: list[str], start: int) -> str | None:
@@ -119,7 +121,6 @@ class ParsingTools:
             raise MetadataError("metadata block must be enclosed in brackets")
         return rest.strip('[]')
 
-
     def _parse_hub(self, body: str, hub_type: str) -> Hub:
         splited = body.split()
         if len(splited) < 3:
@@ -130,7 +131,8 @@ class ParsingTools:
                 raise HubError("x and y cannot be empty")
             if y.startswith('['):
                 raise HubError("y cannot be empty")
-        meta = self._extract_meta_block(splited, 3) if len(splited) > 3 else None
+        meta = (self._extract_meta_block(splited, 3)
+                if len(splited) > 3 else None)
         return Hub(
             name=name,
             x=x,  # type: ignore
@@ -168,7 +170,8 @@ class ParsingTools:
                         meta = (self._extract_meta_block(tokens, 1)
                                 if len(tokens) > 1 else None)
                         meta_data = self._parse_metadata(
-                            meta, ['max_link_capacity'], 'connection')  # type: ignore
+                            meta, ['max_link_capacity'],
+                            'connection')  # type: ignore
                     else:
                         raise ConnectionError(
                             f"connection '{a}-{b}' already exists "
@@ -184,8 +187,9 @@ class ParsingTools:
                 raise ConnectionError(f"hub '{name1}' is connected to itself")
         else:
             raise ConnectionError(f"only 2 hubs are expected for connection, "
-                                f"got {len(tokens[0].split('-'))}")      
-        return Connection(name1=name1, name2=name2, meta_data=meta_data)  # type: ignore
+                                  f"got {len(tokens[0].split('-'))}")
+        return Connection(
+            name1=name1, name2=name2, meta_data=meta_data)
 
 
 class ErrorManagement:
@@ -229,7 +233,6 @@ class ErrorManagement:
                     )
                 )
 
-
     def _missing_errors(self, seen: dict[str, list[tuple[int, str]]]) -> None:
         for key in ("nb_drones", "start_hub", "end_hub", "connection"):
             nb: int = 0
@@ -250,11 +253,12 @@ class ErrorManagement:
                 )
             self.nb_errors += nb
 
-def find_similar(wrong_k: str, keywords: list) -> str:
+
+def find_similar(wrong_k: str, keywords: list[str]) -> str:
     similar: str = ""
-    last_inter: set = set()
+    last_inter: set[str] = set()
     for key in keywords:
-        inter: set = set(wrong_k) & set(key)
+        inter: set[str] = set(wrong_k) & set(key)
         if len(inter) > len(last_inter):
             last_inter = inter
             similar = key
@@ -366,11 +370,11 @@ class Parsing:
     def parse(self, file: str) -> Data:
         self.file = file
         self._lines = self._read_lines(file)
-        try:        
+        try:
             self.structure_validator()
             self.syntax_validator()
             if (self.handle.errors or (
-                self.start_hub is None or self.end_hub is None)):
+                    self.start_hub is None or self.end_hub is None)):
                 self._report(self.handle, file)
                 raise ValueError
         except ValueError:
@@ -388,7 +392,7 @@ class Parsing:
         with open(file, "r") as f:
             content = f.read()
         lines = [line for line in content.splitlines()
-                if line.strip() and not line.startswith('#')]
+                 if line.strip() and not line.startswith('#')]
         return [
             (line, n)
             for n, line in enumerate(lines, start=1)
