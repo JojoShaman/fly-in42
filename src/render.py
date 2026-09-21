@@ -304,7 +304,6 @@ class Layout():
         self.help_size = self.scale_help.get_rect(
             center=self.help_rect().center)
 
-
     def load_map(self, data: Data) -> None:
         """Compute the screen layout for a new map.
 
@@ -342,7 +341,7 @@ class Layout():
                 self.lines.append((self.world_to_screen(h1.x, h1.y),
                                    self.world_to_screen(h2.x, h2.y)))
                 self.lines_name.append((c.name1, c.name2))
-            
+
         self.hub_cache: dict[str, pygame.Surface] = {}
 
     def resize(self, w: int, h: int) -> None:
@@ -447,8 +446,10 @@ class Draw:
         start = (255, 255, 255)
         end = (255, 30, 60)
         for (pos_a, pos_b), (name1, name2) in zip(
-            self._layout.lines, self._layout.lines_name):
-            key = self._sim.link_key((name1, self._sim.hubs[name1]), (name2, self._sim.hubs[name2]))
+                self._layout.lines, self._layout.lines_name):
+            key = (self._sim.link_key(
+                (name1, self._sim.hubs[name1]),
+                (name2, self._sim.hubs[name2])))
             cap = self._sim.link_cap.get(key, 1)
             usage = self._sim.link_usage.get(key, 0)
             ratio = min(1.0, usage / cap)
@@ -457,7 +458,6 @@ class Draw:
             b = int(start[2] + (end[2] - start[2]) * ratio)
             pygame.draw.line(self._screen, 'black', pos_a, pos_b, 5)
             pygame.draw.line(self._screen, (r, g, b), pos_a, pos_b, 2)
-
 
     def tinted(self, color: str) -> Surface:
         """Get a hub image tinted to the given color, from cache if possible.
@@ -507,6 +507,7 @@ class Draw:
         self._screen.blit(img, img.get_rect(center=pos))
 
     def hub_pos(self, hub_data: Hub) -> Rect:
+        """Return Rect of the hub"""
         ret = self._layout.world_to_screen(hub_data.x, hub_data.y)
         return Rect(self._layout.cp_hub.get_rect(center=ret))
 
@@ -551,7 +552,8 @@ class Draw:
         """Draw the current map's name in the bottom-left corner."""
         w, h = self._screen.get_width(), self._screen.get_height()
         surf = self._font.render(self._map_txt, False, 'white')
-        self._screen.blit(surf, surf.get_rect(bottomleft=(w // 50, h - (h // 55))))
+        self._screen.blit(surf, surf.get_rect(
+            bottomleft=(w // 50, h - (h // 55))))
 
     def reset_turn(self) -> None:
         """Reset the displayed turn counter to zero."""
@@ -628,6 +630,8 @@ class Draw:
         self._screen.blit(panel, (r.left, r.bottom + 10))
 
     def display_hub_info(self) -> None:
+        """Draw informations about the hub, such as 'name',
+         'position', 'zone type', and 'max_drones.'"""
         from data import Type
         zone_type: dict[Type, str] = {
             Type.normal: 'normal',
@@ -638,10 +642,14 @@ class Draw:
         for hub in self._layout.data.total_hubs:
             if not self.hub_pos(hub).collidepoint(pygame.mouse.get_pos()):
                 continue
-            line: str = f"{hub.name}    {hub.x}, {hub.y}    zone={zone_type[hub.meta_data.zone]}    max_drones={hub.meta_data.max_drones}"
+            line: str = (f"{hub.name}    {hub.x}, {hub.y}    "
+                         f"zone={zone_type[hub.meta_data.zone]}    "
+                         f"max_drones={hub.meta_data.max_drones}")
             w, h = self._screen.get_width(), self._screen.get_height()
             info_panel = self._info_font.render(line, False, 'white')
-            self._screen.blit(info_panel, info_panel.get_rect(midbottom=(w // 2, h - h // 55)))
+            self._screen.blit(
+                info_panel, info_panel.get_rect(
+                    midbottom=(w // 2, h - h // 55)))
             break
 
 
