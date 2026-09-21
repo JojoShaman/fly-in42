@@ -22,6 +22,10 @@ class Drone:
         turn: Movement state. 0 when idle, 1 after a normal move, 2 while
             waiting out the extra turn a restricted hub costs.
         id: Creation order of the drone.
+        end: True once the drone has reached the goal hub.
+        end_output: True once this drone's arrival has been printed,
+            so it stops appearing in the turn-by-turn output.
+        prev_hub: Hub the drone took off from, used as the interpolation start.
         prev_hub: Hub the drone took off from, used as the interpolation start.
         progress: Position along the current segment, between 0 and 1.
         target: Value progress stops at. 0.5 holds the drone mid-air for a
@@ -38,6 +42,7 @@ class Drone:
         self.turn: int = 0
         self.id: int = n
         self.end: bool = False
+        self.end_output: bool = False
         self.prev_hub: Hub = self.path[0]
         self.progress: float = 0.0
         self.target: float = 0.0
@@ -111,7 +116,7 @@ class Simulation:
         if not self._path:
             raise NoPathFound
         self.drones = [
-            Drone(self._path, n) for n in range(data.nb_drones)]
+            Drone(self._path, n) for n in range(1, data.nb_drones + 1)]
         self._path[0].nb_drones = data.nb_drones
         self._path[len(self._path) - 1].meta_data.max_drones = data.nb_drones
         self.in_motion: dict[Drone, str] = {}
@@ -178,7 +183,10 @@ class Simulation:
     def output(self) -> None:
         """Print the hub each moving drone is heading for this turn."""
         for d, positon in self.in_motion.items():
-            print(f'D{d.id}-{positon} ', end='')
+            if not d.end_output:
+                print(f'D{d.id}-{positon} ', end='')
+            if d.end:
+                d.end_output = True
         print()
 
     def update_drone(self) -> None:
