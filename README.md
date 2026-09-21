@@ -29,7 +29,7 @@ The project is split into four independent layers:
 ### Requirements
 
 - Python 3.10 or later
-- pygame, pydantic (see `requirements.txt` / `pyproject.toml`)
+- pygame, pydantic (see `pyproject.toml`)
 
 ### Installation
 
