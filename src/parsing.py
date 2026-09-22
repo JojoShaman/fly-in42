@@ -8,6 +8,7 @@ from data import (
     Metadata,
     Type,
 )
+import re
 
 KEYWORDS = [
     "nb_drones",
@@ -94,7 +95,6 @@ class ParsingTools:
                 key, repeats a key, or gives an invalid zone.
         """
         meta: dict[str, Any] = {}
-        max_drone_default = '1' if data_type == 'hub' else str(self.max_drones)
         if raw is not None:
             for token in raw.split():
                 if token == '=':
@@ -102,6 +102,15 @@ class ParsingTools:
                         "syntax error, spaces around '=' are not allowed")
                 key, sep, value = token.partition('=')
                 if not sep:
+                    if token == key:
+                        if key not in keywords:
+                            suggestion = find_similar(key, keywords)
+                            if suggestion:
+                                suggestion = (
+                                    f" Perhaps you meant '{suggestion}' ?")
+                            raise MetadataError(
+                                f"keyword '{key}' is not valid for "
+                                f"{data_type} metadata.{suggestion}")
                     raise MetadataError(f"'=' is missing in '{token}'")
                 if not key or not value:
                     raise MetadataError(
@@ -116,6 +125,16 @@ class ParsingTools:
                 if key in meta:
                     raise MetadataError(
                         f"multiple '{key}' attribute in metadata")
+                if key == 'zone' or key == 'color':
+                    syntax_check: list[str] = re.findall(r"[^A-Za-z]", value)
+                else:
+                    syntax_check: list[str] = re.findall(r"[^0-9]", value)
+                if syntax_check:
+                    errors: str = ', '.join(f"'{e}'" for e in syntax_check)
+                    word = 'characters' if len(syntax_check) > 1 else 'character'
+                    raise MetadataError(
+                        f"{key} Found invalid {word} in value - {errors}"
+                    )
                 if key == 'zone' and value not in _ZONES:
                     suggestion = find_similar(value, list(_ZONES))
                     if suggestion != '':
@@ -127,10 +146,10 @@ class ParsingTools:
             return ConnectionMetadata(max_link_capacity=meta.get(
                 'max_link_capacity', 1))
         if data_type in ('start_hub', 'end_hub'):
-            meta.pop('max_drones', None)
+            meta['max_drones'] = 'inf'
         zone: Type = _ZONES[meta.get('zone', 'normal')]
         color = meta.get('color', 'none')
-        max_drones = meta.get('max_drones', max_drone_default)
+        max_drones = meta.get('max_drones', '1')
         return Metadata(
             zone=zone, color=color, max_drones=max_drones)
 
@@ -319,13 +338,15 @@ class ErrorManagement:
                 lines.append((line, key))
         lines.sort()
         self._missing_errors(seen)
+        last_key: str = ""
         for n, key in lines:
             if key == 'nb_drones':
-                if n != 1:
+                if last_key:
                     self.nb_errors += 1
                     self.errors.append(
                         (f'  {RED}➜{RESET} line {n}: nb_drones '
                          f'should be initialized first', n))
+            last_key = key
         self._duplicate_errors(seen)
 
     def _duplicate_errors(
@@ -580,12 +601,9 @@ class Parsing:
         """
         with open(file, "r") as f:
             content = f.read()
-        lines = [line for line in content.splitlines()
+        lines = [(line, n) for n, line in enumerate(content.splitlines(), 1)
                  if line.strip() and not line.startswith('#')]
-        return [
-            (line, n)
-            for n, line in enumerate(lines, start=1)
-        ]
+        return lines
 
     def _file_checker(self, file: str) -> tuple[bool, bool]:
         """Check whether a file's only content is comments or blank lines.

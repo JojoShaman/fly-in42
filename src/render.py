@@ -419,7 +419,7 @@ class Draw:
         self._layout: Layout = layout
         self._font: Font = Font('src/images/determination.ttf', 15)
         self._panel_font: Font = Font('src/images/determination.ttf', 10)
-        self._info_font: Font = Font('src/images/MADEOkine.otf', 10)
+        self._info_font: Font = Font('src/images/determination.ttf', 10)
         self._map_txt: str = ""
         self._turn: int = 0
         self._avg_turn: float = 0
@@ -538,7 +538,7 @@ class Draw:
         i_size = max(5, self._screen.get_height() // 40)
         self._font = Font('src/images/determination.ttf', size)
         self._panel_font = Font('src/images/determination.ttf', p_size)
-        self._info_font = Font('src/images/MADEOkine.otf', i_size)
+        self._info_font = Font('src/images/determination.ttf', i_size)
 
     def set_map_name(self, filepath: Path) -> None:
         """Set the map name shown on screen.
@@ -642,11 +642,18 @@ class Draw:
         for hub in self._layout.data.total_hubs:
             if not self.hub_pos(hub).collidepoint(pygame.mouse.get_pos()):
                 continue
+            mx_d = ('∞' if hub.meta_data.max_drones == float('inf')
+                    else str(int(hub.meta_data.max_drones)))
             line: str = (f"{hub.name}    {hub.x}, {hub.y}    "
                          f"zone={zone_type[hub.meta_data.zone]}    "
-                         f"max_drones={hub.meta_data.max_drones}")
+                         f"max_drones={mx_d}")
+            occupation_line: str = str(hub.nb_drones)
             w, h = self._screen.get_width(), self._screen.get_height()
             info_panel = self._info_font.render(line, False, 'white')
+            info_occupation = self._info_font.render(occupation_line, False, 'white')
+            r: Rect = self.hub_pos(hub)
+            o: Rect = info_occupation.get_rect(midbottom=(r.midtop))
+            self._screen.blit(info_occupation, o)
             self._screen.blit(
                 info_panel, info_panel.get_rect(
                     midbottom=(w // 2, h - h // 55)))
@@ -761,7 +768,7 @@ def rendering(data: Data, filepath: str) -> None:
                         if delivered:
                             delivered = False
                         sim = new_sim
-                        fly_in.load_map(current_map)
+                        fly_in.load_map(parse)
                         draw = Draw(fly_in, sim)
                         draw.set_map_name(map_path)
                         draw.reset_turn()

@@ -111,14 +111,18 @@ class Simulation:
                 (c.name1, self.hubs[c.name1]),
                 (c.name2, self.hubs[c.name2])): c.meta_data.max_link_capacity
             for c in data.connection}
+        self.run_turn: dict[tuple[str, str], int] = {
+            self.link_key(
+                (c.name1, self.hubs[c.name1]),
+                (c.name2, self.hubs[c.name2])): 0
+            for c in data.connection}
         self._path_obj: Path = Path(data)
         self._path: list[Hub] = self._path_obj.find_path(data.start_hub.name)
         if not self._path:
             raise NoPathFound
         self.drones = [
             Drone(self._path, n) for n in range(1, data.nb_drones + 1)]
-        self._path[0].nb_drones = data.nb_drones
-        self._path[len(self._path) - 1].meta_data.max_drones = data.nb_drones
+        data.start_hub.nb_drones = data.nb_drones
         self.in_motion: dict[Drone, str] = {}
         self.drones_moved: int = 0
 
@@ -196,6 +200,7 @@ class Simulation:
         drone can be taken by the one behind it within the same turn.
         """
         self.drones_moved = 0
+        self.run_turn = dict.fromkeys(self.link_cap, 0)
         for drone in sorted(self.drones, key=lambda d: len(d.path)):
             curr = drone.path[0]
             if drone.turn == 2:
@@ -215,8 +220,11 @@ class Simulation:
                 key = self.link_key(
                     (curr.name, self.hubs[curr.name]),
                     (next_h.name, self.hubs[next_h.name]))
+                if self.run_turn[key] >= self.link_cap.get(key, 1):
+                    continue
                 self.link_usage[key] = self.link_usage.get(key, 0)
                 drone.flying_link = key
+                self.run_turn[key] += 1
                 curr.nb_drones -= 1
                 next_h.nb_drones += 1
                 drone.prev_hub = curr
@@ -242,4 +250,6 @@ class Simulation:
                 self.in_motion[drone] = position
                 drone.step += 1
                 self.drones_moved += 1
+            else:
+                self.in_motion.pop(drone, None)
         self.output()

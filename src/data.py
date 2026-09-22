@@ -32,7 +32,7 @@ class Metadata(BaseModel):
 
     zone: Type = Field(default=Type.normal)
     color: str = Field(default="none")
-    max_drones: int = Field(default=1, ge=1)
+    max_drones: float = Field(default=1, ge=1)
 
 
 class ConnectionMetadata(BaseModel):
