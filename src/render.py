@@ -471,7 +471,10 @@ class Draw:
         if color == 'rainbow':
             return self._rainbow()
         if color not in self._layout.hub_cache:
-            rgb = Color(color)
+            try:
+                rgb = Color(color)
+            except ValueError:
+                rgb = Color('grey')
             rgb = Color(
                 max(rgb.r, 35), max(rgb.g, 35), max(rgb.b, 35))
             img = self._layout.cp_hub.copy()
@@ -650,7 +653,8 @@ class Draw:
             occupation_line: str = str(hub.nb_drones)
             w, h = self._screen.get_width(), self._screen.get_height()
             info_panel = self._info_font.render(line, False, 'white')
-            info_occupation = self._info_font.render(occupation_line, False, 'white')
+            info_occupation = self._info_font.render(
+                occupation_line, False, 'white')
             r: Rect = self.hub_pos(hub)
             o: Rect = info_occupation.get_rect(midbottom=(r.midtop))
             self._screen.blit(info_occupation, o)

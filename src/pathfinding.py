@@ -98,7 +98,7 @@ class Path:
             0.5 when the start's outgoing capacity is 1 or less,
             5.1 otherwise.
         """
-        flow = 0
+        flow: float = 0
         for c in self._data.connection:
             if self._data.start_hub.name in (c.name1, c.name2):
                 neighbour = (
@@ -139,7 +139,7 @@ class Path:
                 h2_data: Hub = self.lookhub[c.name2]
                 h1_data: Hub = self.lookhub[c.name1]
                 hub_zone: Type = h2_data.meta_data.zone
-                hub_max_d: int = h2_data.meta_data.max_drones
+                hub_max_d: float = h2_data.meta_data.max_drones
                 base: float = 2 if hub_zone == Type.restricted else 1
                 occupation = h2_data.nb_drones / max(1, hub_max_d)
                 multi = (self._multi

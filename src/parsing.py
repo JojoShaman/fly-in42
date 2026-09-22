@@ -128,14 +128,15 @@ class ParsingTools:
                 if key == 'zone' or key == 'color':
                     syntax_check: list[str] = re.findall(r"[^A-Za-z]", value)
                 else:
-                    syntax_check: list[str] = re.findall(r"[^0-9]", value)
+                    syntax_check = re.findall(r"[^0-9]", value)
                 if syntax_check:
                     errors: str = ', '.join(f"'{e}'" for e in syntax_check)
-                    word = 'characters' if len(syntax_check) > 1 else 'character'
+                    word = ('characters' if len(syntax_check) > 1
+                            else 'character')
                     raise MetadataError(
                         f"{key} Found invalid {word} in value - {errors}"
                     )
-                if key == 'zone' and value not in _ZONES:
+                elif key == 'zone' and value not in _ZONES:
                     suggestion = find_similar(value, list(_ZONES))
                     if suggestion != '':
                         suggestion = f" Perhaps you meant '{suggestion}' ?"
@@ -601,9 +602,8 @@ class Parsing:
         """
         with open(file, "r") as f:
             content = f.read()
-        lines = [(line, n) for n, line in enumerate(content.splitlines(), 1)
-                 if line.strip() and not line.startswith('#')]
-        return lines
+        return [(line, n) for n, line in enumerate(content.splitlines(), 1)
+                if line.strip() and not line.startswith('#')]
 
     def _file_checker(self, file: str) -> tuple[bool, bool]:
         """Check whether a file's only content is comments or blank lines.
