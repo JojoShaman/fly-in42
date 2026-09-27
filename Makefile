@@ -1,4 +1,4 @@
-MAPS_URL = https://cdn.intra.42.fr/document/document/55008/maps.tar.gz
+MAPS_URL = https://cdn.intra.42.fr/document/document/57653/maps.tar.gz
 
 maps:
 	@if [ ! -d maps ]; then \
